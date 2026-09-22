@@ -1,0 +1,224 @@
+#!/usr/bin/env bash
+# claude-loop — roda o Claude em CONTEXTOS LIMPOS sucessivos até a tarefa acabar.
+#
+# Realiza o seu ritual manual de "dar /clear + colar prompt de handoff", automático:
+# cada iteração é um 'claude -p' novo (janela limpa). O estado/handoff vive em
+# .handoff/state.md. O Claude lê o estado, executa a próxima fatia (delegando ao
+# 'delegate' quando for braçal), reescreve o estado e sai. A próxima volta nasce enxuta.
+#
+# Sinais que o Claude escreve no TOPO de state.md para encerrar o loop:
+#   TAREFA_COMPLETA              -> objetivo concluído e revisado
+#   PRECISA_HUMANO: <pergunta>   -> só então o loop para e te chama
+#
+# Uso:
+#   claude-loop "objetivo da tarefa longa"   # cria o state.md na 1ª vez
+#   claude-loop                              # retoma de um state.md existente
+#
+# Overrides por env:
+#   MAX_ITERS          teto de iterações (default: 20)
+#   HANDOFF_DIR        pasta de estado   (default: .handoff)
+#   AUTO_RESUME        1=ao bater no limite de uso, dorme até o reset e CONTINUA
+#                      sozinho; 0=pausa e sai (default: 1)
+#   AUTO_RESUME_PAD    segundos extras após o horário de reset (default: 90)
+#   AUTO_RESUME_MAX    teto de espera por pausa, em segundos (default: 25200 = 7h)
+#   AUTO_RESUME_FALLBACK  se não der pra ler o horário de reset, dorme estes
+#                      segundos e tenta de novo (default: 1800 = 30min, p/ nunca
+#                      morrer à noite; ponha 0/"" p/ sair com exit 3 ao não ler)
+set -euo pipefail
+
+# Qual binário/conta roda o loop. Alias do .bashrc (ex.: `claude-fable`) NÃO serve aqui — alias só
+# existe em shell interativo. Para trocar de CONTA, o que muda é a pasta de config:
+#   CLAUDE_CONFIG_DIR="$HOME/.claude-fable" claude-loop "objetivo"
+# (a variável é herdada pelo `claude` filho; nada mais precisa mudar).
+CLAUDE_BIN="${CLAUDE_BIN:-claude}"
+# Modelo por rodada, sem mexer no settings.json da conta — útil quando a conta está configurada
+# com um modelo barato para uso interativo e a tarefa do loop pede um modelo forte.
+CLAUDE_MODEL="${CLAUDE_MODEL:-}"
+
+HANDOFF_DIR="${HANDOFF_DIR:-.handoff}"
+STATE="$HANDOFF_DIR/state.md"
+MAX_ITERS="${MAX_ITERS:-20}"
+AUTO_RESUME="${AUTO_RESUME:-1}"
+AUTO_RESUME_PAD="${AUTO_RESUME_PAD:-90}"
+AUTO_RESUME_MAX="${AUTO_RESUME_MAX:-25200}"
+AUTO_RESUME_FALLBACK="${AUTO_RESUME_FALLBACK:-1800}"
+mkdir -p "$HANDOFF_DIR"
+
+# _parse_reset — lê (via stdin) linhas de erro de limite do Claude e imprime os
+# SEGUNDOS até o reset (inteiro), ou nada se não conseguir. Best-effort: cobre
+# "resets at 3pm", "resets 16:30", "try again in 45 minutes", "in 1h 30m",
+# epoch unix e ISO-8601. Calibrar com uma mensagem real quando aparecer.
+_parse_reset() {
+  # lê stdin para uma var e passa por env (não dá pra usar stdin: o heredoc do
+  # 'python3 - <<PY' já ocupa o stdin com o próprio script).
+  local _t; _t="$(cat)"
+  _PARSE_TEXT="$_t" python3 - <<'PY'
+import os, re, time, datetime as dt
+s = os.environ.get('_PARSE_TEXT', '').lower()
+now = time.time()
+best = None
+def consider(secs):
+    global best
+    if secs is None: return
+    secs = int(secs)
+    if 0 < secs and (best is None or secs < best):
+        best = secs
+# 1) "in 1h 30m" / "in 45 minutes" / "in 2 hours" / "try again in ..."
+m = re.search(r'\bin\s+(?:(\d+)\s*h(?:ours?)?)?\s*(?:(\d+)\s*m(?:in(?:utes?)?)?)?', s)
+if m and (m.group(1) or m.group(2)):
+    consider((int(m.group(1) or 0))*3600 + (int(m.group(2) or 0))*60)
+# 2) epoch unix (10 dígitos) — ex.: "resets 1750800000"
+for e in re.findall(r'\b(1[0-9]{9})\b', s):
+    consider(int(e) - now)
+# 3) ISO-8601 "2026-06-24t23:30[:00]"
+for iso in re.findall(r'(\d{4}-\d{2}-\d{2}[t ]\d{2}:\d{2}(?::\d{2})?)', s):
+    try:
+        t = dt.datetime.fromisoformat(iso.replace('t',' ')).timestamp()
+        consider(t - now)
+    except Exception: pass
+# 4) hora do dia "3pm", "3:30am", "16:30" perto de "reset"/"again"
+for hm in re.finditer(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)?', s):
+    h, mn, ap = int(hm.group(1)), int(hm.group(2) or 0), hm.group(3)
+    if ap is None and not (0 <= h <= 23): continue
+    if ap == 'pm' and h < 12: h += 12
+    if ap == 'am' and h == 12: h = 0
+    if h > 23 or mn > 59: continue
+    n = dt.datetime.now()
+    cand = n.replace(hour=h, minute=mn, second=0, microsecond=0)
+    if cand.timestamp() <= now: cand += dt.timedelta(days=1)
+    # só aceita horas isoladas se houver am/pm/':' (evita pegar números soltos)
+    if ap or hm.group(2):
+        consider(cand.timestamp() - now)
+if best is not None:
+    print(best)
+PY
+}
+
+GOAL="${1:-}"
+if [ -n "$GOAL" ] && [ ! -f "$STATE" ]; then
+  cat >"$STATE" <<EOF
+# OBJETIVO
+$GOAL
+
+# ESTADO
+(início — nada feito ainda)
+
+# PRÓXIMO PASSO
+Planejar e executar a primeira fatia.
+EOF
+fi
+
+if [ ! -f "$STATE" ]; then
+  echo "Uso: claude-loop \"objetivo da tarefa\"   (cria $STATE)" >&2
+  exit 2
+fi
+
+i=0
+while [ "$i" -lt "$MAX_ITERS" ]; do
+  i=$((i + 1))
+  echo ""
+  echo "═════ claude-loop · iteração $i/$MAX_ITERS · $(date '+%H:%M:%S') ═════"
+  PROMPT="$(cat <<EOF
+Você está em um LOOP de contexto limpo (sua memória entre voltas é o arquivo $STATE).
+O humano provavelmente está AUSENTE (dormindo). Aja com AUTONOMIA MÁXIMA: avance TUDO
+que for possível sem ele, parando só quando genuinamente não houver mais o que fazer
+sozinho. Você é o cérebro/revisor; o trabalho braçal é do 'delegate' (Antigravity).
+
+Faça:
+1. Leia o ESTADO ATUAL abaixo.
+2. Execute a PRÓXIMA fatia. DELEGUE AGRESSIVAMENTE o braçal/pesado em tokens rodando
+   delegate "<briefing claro com caminhos e entregável>" (--think high p/ mecânico-com-
+   julgamento; --redo p/ corrigir sem re-briefar). Briefing longo → escreva em
+   .handoff/BRIEFING-<fatia>.md e rode: delegate --think high "Execute o briefing em <path>".
+   Rode o delegate em FOREGROUND e espere terminar (em modo -p ninguém te notifica de
+   background; iteração que "aguarda" é iteração jogada fora). Ao voltar, confira que a
+   saída .handoff/agy-*.txt não está vazia nem é erro de timeout — e mesmo em erro, cheque
+   'git status': o agente pode ter deixado trabalho PARCIAL no disco; re-briefe só o que falta.
+   Você revisa o resumo/diff — mas NÃO
+   pare pra pedir aprovação humana de trabalho intermediário; a revisão é SUA.
+   ⚠ ANTI-DESPERDÍCIO (a falha #1 deste loop): "é pequena, faço direto" é racionalização
+   PROIBIDA quando a fatia (a) REPETE um padrão já provado numa fatia anterior — mesma
+   transformação em outro arquivo/helper — ou (b) é mecânica em volume (apagar/mover N
+   arquivos, codemod, migração repetitiva). Nesses casos NÃO faça à mão: AGRUPE as fatias
+   repetitivas restantes em UM brief e rode delegate --think med (aponte a fatia-modelo já
+   feita como exemplo). Várias fatias "pequenas" feitas no Opus = o desperdício que o
+   delegate existe para evitar. Só faça à mão o que exige JULGAMENTO real (design de port/
+   arquitetura, teste de caracterização de código sem testes, decisão de risco/produto).
+3. REESCREVA $STATE inteiro, enxuto e focado: o que já foi feito, estado atual, próximo
+   passo. NÃO deixe inchar — resuma o histórico.
+4. Encerramento (só estes dois casos param o loop):
+   - OBJETIVO inteiro concluído E revisado (testes verdes + diff conferido) → escreva a
+     linha exata TAREFA_COMPLETA no TOPO de $STATE.
+   - Bloqueio que SÓ o humano resolve → escreva PRECISA_HUMANO: <pergunta curta> no TOPO.
+     Use isto APENAS para o que é genuinamente dele: ação outward-facing/irreversível
+     (deploy em prod, push, gastar dinheiro, mandar mensagem), credencial/segredo que
+     falta, ou decisão de produto/arquitetura sem resposta óbvia. NUNCA pare só para
+     "revise isto", "confirma?", "quer que eu siga?" — a resposta a isso é SIM, siga.
+   Se uma fatia travar mas houver OUTRA fatia possível, faça a outra; não desista cedo.
+
+--- ESTADO ATUAL ($STATE) ---
+$(cat "$STATE")
+EOF
+)"
+  LOG="$HANDOFF_DIR/loop-iter-$i.log"
+  set +e
+  # --verbose: mostra o trabalho AO VIVO (ferramentas/passos), não só a msg final.
+  MODELO_ARG=(); [ -n "$CLAUDE_MODEL" ] && MODELO_ARG=(--model "$CLAUDE_MODEL")
+  "$CLAUDE_BIN" --dangerously-skip-permissions --verbose "${MODELO_ARG[@]}" -p "$PROMPT" 2>&1 | tee "$LOG"
+  rc=${PIPESTATUS[0]}
+  set -e
+
+  # Limite de uso do Claude. Com AUTO_RESUME=1: lê o horário de reset, DORME até lá
+  # e CONTINUA sozinho (re-tenta a mesma fatia — o estado não mudou). Sem ele: pausa.
+  if grep -qiE "session limit|usage limit|rate limit|hit your .*limit|limit · reset|resets? (at|in)" "$LOG"; then
+    echo "⏸  Limite de uso do Claude atingido na iteração $i." >&2
+    if [ "$AUTO_RESUME" = "1" ]; then
+      # Quantos segundos até o reset? Lê das últimas linhas de limite/reset do log.
+      WAIT="$(grep -iE "reset|limit" "$LOG" | tail -8 | _parse_reset)"
+      SRC="horário de reset lido da mensagem"
+      if ! { [ -n "$WAIT" ] && [ "$WAIT" -gt 0 ] 2>/dev/null; }; then
+        # Não deu pra ler o horário → usa o fallback (default 1800s) p/ NUNCA morrer à noite.
+        WAIT="$AUTO_RESUME_FALLBACK"; SRC="fallback (não li o horário; ver $LOG p/ calibrar)"
+      fi
+      if [ -n "$WAIT" ] && [ "$WAIT" -gt 0 ] 2>/dev/null; then
+        WAIT=$((WAIT + AUTO_RESUME_PAD))
+        [ "$WAIT" -gt "$AUTO_RESUME_MAX" ] && WAIT="$AUTO_RESUME_MAX"
+        WAKE="$(date -d "+$WAIT seconds" '+%a %H:%M:%S' 2>/dev/null || echo '?')"
+        MIN=$(( WAIT / 60 ))
+        echo "" >&2
+        echo "╔══════════════════════════════════════════════════════════════╗" >&2
+        echo "║ 😴 LIMITE ATINGIDO — AUTO_RESUME LIGADO                       ║" >&2
+        printf  "║   ⏰ VOU RETOMAR ÀS  %-40s ║\n" "$WAKE" >&2
+        printf  "║   ⏳ daqui a ~%-3s min (%s s)%*s║\n" "$MIN" "$WAIT" $((28 - ${#WAIT})) "" >&2
+        printf  "║   📍 fonte: %-49s ║\n" "$SRC" >&2
+        echo "║   ⚠ NÃO use o Claude em outro terminal até lá (quota da conta)║" >&2
+        echo "║   ⚠ mantenha este processo vivo (tmux/nohup)                 ║" >&2
+        echo "╚══════════════════════════════════════════════════════════════╝" >&2
+        sleep "$WAIT"
+        echo "⏰ $(date '+%H:%M:%S') — acordei, retomando a iteração $i." >&2
+        i=$((i - 1))   # não gasta uma iteração: refaz a MESMA fatia
+        continue
+      fi
+    fi
+    echo "   Estado preservado em $STATE. Retome com 'claude-loop' após o reset." >&2
+    exit 3
+  fi
+  # Qualquer outra falha do claude: para com clareza, sem corromper o estado.
+  if [ "$rc" -ne 0 ]; then
+    echo "⚠ claude saiu com erro (rc=$rc) na iteração $i. Loop parado; estado em $STATE." >&2
+    exit 1
+  fi
+
+  if grep -q "^TAREFA_COMPLETA" "$STATE"; then
+    echo "✓ TAREFA_COMPLETA em $i iteração(ões)."
+    exit 0
+  fi
+  if grep -q "^PRECISA_HUMANO" "$STATE"; then
+    echo "⚠ O Claude precisa de você:"
+    grep "^PRECISA_HUMANO" "$STATE" >&2
+    exit 0
+  fi
+done
+
+echo "⚠ Atingiu MAX_ITERS=$MAX_ITERS sem concluir. Veja $STATE e rode 'claude-loop' de novo para continuar." >&2
+exit 0

@@ -1,0 +1,13 @@
+{
+  "PreCompact": [
+    {
+      "matcher": "auto",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "notify-send -u critical \"Claude · contexto quase cheio\" \"Considere parar e fazer handoff (HANDOFF.md + /clear) antes do auto-compact borrar o foco.\""
+        }
+      ]
+    }
+  ]
+}

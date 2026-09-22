@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# delegate — entrega uma tarefa braçal/pesada ao Antigravity CLI (agy), headless.
+#
+# Filosofia: o agente faz TODO o trabalho no disco (lendo, editando, RODANDO
+# comandos e verificando) e devolve SÓ um resumo curto. O montão de tokens
+# (diffs, logs) nunca entra no contexto de quem chamou (o Claude). A saída crua
+# fica salva em .handoff/.
+#
+# Backend: Antigravity CLI (`agy`), que roda na assinatura Google AI Pro/Ultra
+# (login OAuth, sem API paga). Substituiu o gemini-cli, que a Google cortou do
+# tier individual/AI Pro em 18/06/2026 ("migrate to Antigravity"). Diferente do
+# gemini-cli (one-shot burro), o agy é um AGENTE: planeja, usa ferramentas de
+# arquivo/shell, executa de verdade e itera — então o delegate manda EXECUTAR e
+# VERIFICAR, não simular.
+#
+# Uso:
+#   delegate "refatore os 12 componentes para usar o novo hook useX"
+#   delegate --think low  "<transform burro: renomear, mover, substituir string>"
+#   delegate --think pro  "<análise difícil: raciocínio, não execução>"
+#   delegate --redo "ficou faltando o arquivo X; corrija"   # re-delega na MESMA
+#                                                            # conversa (--continue)
+#   echo "tarefa longa..." | delegate
+#
+# Overrides por env:
+#   DELEGATE_MODEL   slug do modelo no agy    (default: gemini-3.7-flash-high; ver `agy models`)
+#                    tarefa difícil/longa: DELEGATE_MODEL=gemini-3.8-flash-high
+#   DELEGATE_TIMEOUT timeout do print mode    (default: 30m)
+#   HANDOFF_DIR      pasta de estado          (default: .handoff)
+set -euo pipefail
+
+# --- parse de flags (em qualquer ordem, antes do briefing) ------------------
+#   --think low|med|high|pro  → esforço de raciocínio por tipo de tarefa
+#       low/med/high = Gemini 3.7 Flash no esforço correspondente (default: high)
+#       pro          = Gemini 3.1 Pro (High), só para raciocínio puro (ver nota abaixo)
+#   --redo (alias --continue) → re-delega CONTINUANDO a última conversa do agy
+#       (o agente lembra o que já fez; passe só a correção, sem re-briefar tudo)
+THINK=""
+CONTINUE=""
+while [ $# -gt 0 ]; do
+  case "${1:-}" in
+    --think)            THINK="${2:-}"; shift 2 ;;
+    --redo|--continue)  CONTINUE="--continue"; shift ;;
+    -h|--help)          # responder AQUI — jamais mandar '--help' como tarefa ao agy
+                        echo "Uso: delegate [--think low|med|high|pro] [--redo] \"<briefing da tarefa>\"" ;
+                        echo "     (briefing longo: escreva em .handoff/BRIEFING-*.md e passe 'Execute o briefing em <path>')" ;
+                        exit 0 ;;
+    *)                  break ;;
+  esac
+done
+# Modelo default: **Gemini 3.7 Flash (High)** — 10/09/2026. Antes: 3.6 Flash (High) desde
+# 30/07/2026; antes disso, 3.1 Pro (High).
+#
+# A regra que decide o default é sempre a mesma: rodar `bench/run.sh` e, entre os modelos
+# que entregam o MESMO diff, ficar com o mais rápido. Bancada de 10/09/2026 (2 rodadas,
+# fixtures em vla-tools/dupla/bench/, resultados em bench/RESULTADOS.md): 3.6, 3.7 e 3.8
+# Flash (High) passaram os 3 testes e 5/5 do juiz oculto, com diff equivalente — e o
+# relógio separou: 3.7 ≈ 100s as duas fixtures, 3.6 ≈ 197s, 3.8 ≈ 345-441s. O 3.8 ainda
+# deixou, numa das rodadas, duas chamadas com a opção antiga em test/ (passa nos testes
+# porque o default do config assume; é exatamente o "verde que esconde") — o 3.7 não
+# errou em nenhuma. Mesma capacidade, 1/4 do relógio ⇒ default.
+#
+# Quando usar o 3.8: ele lidera os benchmarks publicados nas tarefas DIFÍCEIS (Terminal-
+# Bench 2.1 90,8 × 81,6 do 3.7; SWE-Bench Pro 61,6 × 60,4) porque "trabalha mais" — mais
+# passos de raciocínio e mais chamadas de ferramenta, que é de onde vem a lentidão. A
+# bancada é fácil demais para enxergar essa diferença. Para tarefa grande/difícil, o
+# escape hatch é por env, sem nova flag:
+#     DELEGATE_MODEL=gemini-3.8-flash-high delegate "<briefing>"
+#
+# ⚠️ O que continua PROIBIDO é o **3.5 Flash** (geração anterior): foi ele que, em
+# 22/07/2026, corrompeu a sintaxe de um arquivo do front (deixou `})` órfão em nível de
+# módulo, quebrando o bundle) e ainda reportou "verificado, testes verdes" tendo rodado
+# uma suíte que nem importava o arquivo editado. A regra "nunca Flash" nasceu daquele
+# incidente e era sobre AQUELE modelo — não sobre a família.
+#
+# `--think pro` continua alcançando o 3.1 Pro: ele ainda lidera, por pouco, em raciocínio
+# puro (GPQA Diamond 95,5 × 94,4 do 3.8 Flash, medição independente da Vals AI) e em
+# needle-in-haystack (MRCR v2). Use quando a tarefa for análise difícil, não execução
+# mecânica — e como segunda opinião de um modelo diferente num `--redo`.
+case "$THINK" in
+  low)      MODEL="gemini-3.7-flash-low" ;;
+  med)      MODEL="gemini-3.7-flash-medium" ;;
+  high)     MODEL="gemini-3.7-flash-high" ;;
+  pro)      MODEL="gemini-3.1-pro-high" ;;   # escape hatch: raciocínio puro, não execução
+  "")       MODEL="${DELEGATE_MODEL:-gemini-3.7-flash-high}" ;;
+  *) echo "delegate: --think inválido '$THINK' (use low|med|high|pro)" >&2; exit 2 ;;
+esac
+case "$MODEL" in
+  *3.5-flash*|*3\.5\ Flash*) echo "delegate: RECUSADO — '$MODEL' é o 3.5 Flash (incidente de 22/07/2026)." >&2; exit 2 ;;
+esac
+HANDOFF_DIR="${HANDOFF_DIR:-.handoff}"
+mkdir -p "$HANDOFF_DIR"
+TS="$(date +%Y%m%d-%H%M%S)"
+RESULT="$HANDOFF_DIR/agy-$TS.txt"
+ERR="$HANDOFF_DIR/agy-$TS.err"
+
+if ! command -v agy >/dev/null 2>&1; then
+  echo "ERRO: 'agy' (Antigravity CLI) não está instalado/no PATH." >&2
+  echo "Instale: curl -fsSL https://antigravity.google/cli/install.sh | bash" >&2
+  echo "Depois rode 'agy' uma vez e logue na conta Google AI Pro." >&2
+  exit 127
+fi
+
+TASK="${1:-}"
+[ -z "$TASK" ] && TASK="$(cat)"   # aceita tarefa via stdin também
+if [ -z "$TASK" ]; then
+  echo "Uso: delegate [--think low|med|high|pro] [--redo] \"<briefing da tarefa>\"" >&2
+  exit 2
+fi
+
+PROMPT="$TASK
+
+---
+COMO AGIR (você é um AGENTE com ferramentas de arquivo e shell — EXECUTE, não simule):
+0. SIGA O PROJETO: se existir CLAUDE.md / AGENTS.md / .cursorrules neste diretório (ou
+   acima), LEIA e respeite os princípios de engenharia e convenções dele — eles são a
+   fonte da verdade do projeto e mandam mais que estas regras genéricas.
+1. ATERRE NA REALIDADE: antes de mudar, leia os arquivos/convenções relevantes e use
+   grep/glob para achar TODAS as ocorrências. Não edite por amostra nem suponha estrutura.
+2. PREFIRA SCRIPT DETERMINÍSTICO: para transform repetitivo/mecânico, escreva um script
+   (Python/sed/node) IDEMPOTENTE e RODE-O — NÃO edite arquivo-por-arquivo no olho (arrisca
+   lixo no fim, var() quebrado, blocos duplicados). Em casos com julgamento (escopo, valor
+   idêntico), o script DETECTA a condição explicitamente, não adivinha.
+3. FIQUE CIRÚRGICO: mude só o que foi pedido. Não reformatar, não \"melhorar\" código vizinho,
+   não adicionar comentários, não tocar o que não foi solicitado.
+4. NA DÚVIDA, PULE E REPORTE: se um caso for ambíguo ou não-idêntico, NÃO adivinhe — deixe
+   como está e liste no resumo para revisão humana.
+5. VERIFIQUE DE VERDADE: RODE o que existir (testes/build/lint) e itere até passar de fato —
+   cole no resumo a saída real do comando, não 'deve passar'. Depois confira 'git diff'
+   linha-a-linha (só o pretendido mudou? sem corrupção?) ANTES de responder.
+6. ERRO VIRA TESTE: se a tarefa for corrigir um bug em código que tem testes, além de
+   corrigir, veja se dá pra reformular de modo que um teste passe a pegá-lo ANTES — mas só
+   quando for elegante e fácil, sem quebrar a cirurgia do item 3. Na dúvida, não force.
+
+REGRAS DE SAÍDA (obrigatório — o chamador é outra IA que paga tokens por cada linha):
+- Faça TODO o trabalho no disco; NÃO despeje diffs nem logs longos na resposta.
+- Responda APENAS um resumo curto e estruturado:
+  * o que mudou (1-5 linhas) e SE usou script determinístico
+  * arquivos tocados (lista de caminhos)
+  * verificação: comando(s) que você RODOU e o resultado real (passou? o que corrigiu?)
+  * qualquer problema/decisão que precise de revisão do orquestrador."
+
+# Seleção de modelo: `--model <slug>` na linha de comando. Funciona desde o agy 1.1.5, que
+# introduziu slugs estáveis aceitos por `--model` (`agy models` lista os válidos). Confirmado
+# no log do agy 1.1.8: `Propagating selected model override to backend: label="..."`.
+#
+# ⚠️ Até 30/07/2026 este script escrevia o modelo em ~/.gemini/antigravity-cli/settings.json,
+# porque no agy da época o `--model` era ignorado em print mode. Aquilo era ESTADO GLOBAL: dois
+# `delegate` simultâneos (ou um `claude-loop` rodando junto de você) se atropelavam e um ia parar
+# no modelo do outro — e o arquivo ficava alterado depois, mudando o modelo da sessão interativa
+# do Vladimir sem ele pedir. Com `--model` a escolha é por processo. NÃO reintroduzir.
+#
+# Guarda: se o agy for anterior ao 1.1.5, `--model` é silenciosamente ignorado — melhor avisar
+# do que rodar no modelo errado achando que rodou no certo.
+AGY_VER="$(agy --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+if [ -n "$AGY_VER" ] && [ "$(printf '%s\n1.1.5\n' "$AGY_VER" | sort -V | head -1)" != "1.1.5" ]; then
+  echo "delegate: aviso — agy $AGY_VER é anterior ao 1.1.5; '--model' pode ser ignorado." >&2
+  echo "           rode 'agy update' para garantir que $MODEL seja de fato o modelo usado." >&2
+fi
+echo "delegate: modelo = $MODEL (agy ${AGY_VER:-?})" >&2
+
+# --add-dir "$PWD": sem isso o agy roda num sandbox próprio e NÃO enxerga o
+# diretório de trabalho — edita arquivos no scratch dele, não no projeto.
+# $CONTINUE (--continue) quando --redo: continua a última conversa, herdando contexto.
+# ⚠️ NÃO passar um `--print` solto: ele ACEITA VALOR (é alias de --prompt) e engolia o
+# `--dangerously-skip-permissions` como se fosse o prompt. `-p "$PROMPT"` já é o print mode.
+if ! agy --dangerously-skip-permissions $CONTINUE --model "$MODEL" --add-dir "$PWD" \
+        --print-timeout "${DELEGATE_TIMEOUT:-30m}" -p "$PROMPT" >"$RESULT" 2>"$ERR"; then
+  echo "DELEGATE_FAILED — veja $ERR" >&2
+  tail -n 20 "$ERR" >&2 || true
+  exit 1
+fi
+
+# agy às vezes sai com rc=0 mas resposta vazia ou "Error: timeout waiting for
+# response" — o trabalho PARCIAL pode ter ficado no disco. Falhar explícito.
+if [ ! -s "$RESULT" ] || grep -qi "timeout waiting for response" "$RESULT"; then
+  echo "DELEGATE_FAILED — agy devolveu vazio/timeout. Trabalho PARCIAL pode estar no disco:" >&2
+  echo "  confira 'git status' antes de re-delegar; re-briefe só o que falta. Saída: $RESULT" >&2
+  exit 1
+fi
+
+echo "✓ Antigravity terminou. Saída completa em: $RESULT"
+echo "--- RESUMO ---"
+# agy --print devolve texto puro (o resumo estruturado pedido no prompt).
+cat "$RESULT"
