@@ -50,7 +50,7 @@ Same capability, a quarter of the wall clock: 3.7 became the default.
 ```bash
 curl -fsSL https://antigravity.google/cli/install.sh | bash   # installs agy
 agy                                                            # log in once
-bash install.sh                                                # wire dupla (idempotent)
+git clone https://github.com/vladimirbrasil/dupla.git && bash dupla/install.sh   # wire dupla (idempotent)
 ```
 
 Everything runs auto-approved (`agy --dangerously-skip-permissions`, `claude

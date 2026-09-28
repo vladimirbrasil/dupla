@@ -3,7 +3,7 @@
 # da máquina, para valer em TODOS os projetos. Idempotente e com backups.
 #
 # Backend = Antigravity CLI (`agy`), na assinatura Google AI Pro (sem API paga).
-# Rode quantas vezes quiser:  bash ~/git/vla-tools/dupla/install.sh
+# Rode quantas vezes quiser, de dentro do clone:  bash install.sh
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

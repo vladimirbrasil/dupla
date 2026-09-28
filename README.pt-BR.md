@@ -24,7 +24,7 @@ os projetos.
 ```bash
 curl -fsSL https://antigravity.google/cli/install.sh | bash   # instala o 'agy'
 agy                                                            # logar 1x (Google AI Pro)
-bash ~/git/vla-tools/dupla/install.sh                          # fia a dupla (idempotente)
+git clone https://github.com/vladimirbrasil/dupla.git && bash dupla/install.sh   # fia a dupla (idempotente)
 ```
 
 O `install.sh` fia, nos locais globais:

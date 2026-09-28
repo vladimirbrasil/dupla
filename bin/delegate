@@ -52,7 +52,7 @@ done
 #
 # A regra que decide o default é sempre a mesma: rodar `bench/run.sh` e, entre os modelos
 # que entregam o MESMO diff, ficar com o mais rápido. Bancada de 10/09/2026 (2 rodadas,
-# fixtures em vla-tools/dupla/bench/, resultados em bench/RESULTADOS.md): 3.6, 3.7 e 3.8
+# fixtures em bench/, resultados em bench/RESULTADOS.md): 3.6, 3.7 e 3.8
 # Flash (High) passaram os 3 testes e 5/5 do juiz oculto, com diff equivalente — e o
 # relógio separou: 3.7 ≈ 100s as duas fixtures, 3.6 ≈ 197s, 3.8 ≈ 345-441s. O 3.8 ainda
 # deixou, numa das rodadas, duas chamadas com a opção antiga em test/ (passa nos testes
