@@ -91,6 +91,10 @@ de arquivo + critério de pronto + "rode os testes e cole a saída real"; depois
 **linha-a-linha** (o resumo do agente mente por omissão). Não delegue: decisão de produto,
 verificação visual/de navegador, e tarefa curta o bastante para você fazer em 1-2 edits.
 
+**Não edite o repo enquanto um `delegate` roda nele.** O agente trabalha sobre a cópia que leu e
+regrava o arquivo por cima: uma correção sua some sem aviso e reaparece a versão antiga. Espere ele
+terminar, ou mande a correção pelo `--redo`.
+
 ### Revisão obrigatória do diff (não confie no resumo)
 O resumo do Pro 3.1 ainda pode falhar. Após delegar tarefa mecânica/arriscada, rode
 `git diff` e **revise linha-a-linha** — procure lixo no fim de arquivo, `var()` quebrado,
