@@ -102,6 +102,14 @@ blocos duplicados, mudanças não-pedidas. O `delegate` já manda o agente escre
 **script determinístico** (não editar no olho) e auto-conferir o diff; ainda assim, a
 revisão final é sua.
 
+**Execução remota: o Opus confirma a primeira unidade antes de soltar o lote.** Kernel, deploy, job em
+nuvem: o agente prepara; você confere no log real que a 1ª tarefa completa rodou e a 2ª começou, e só então
+libera o resto. (30/09/2026: o agente submeteu 5 kernels e encerrou; todos morreram em 1 min por um `\n` mal
+escapado no script gerado — o `py_compile` dele conferiu o gerador, não o gerado — e o vigia morreu junto com
+o agente. Uma noite de máquina perdida.)
+**Pesquisa com citação: `conferir-citacoes <entregavel> <fontes>` antes de ler** (quando existir no PATH).
+Mesmo dia: citação "literal" que era paráfrase + "100% validado" falso; em 28/09, 6 de 10 DOIs errados.
+
 ### Checklist de briefing (você é o briefer — peça por julgamento o que a tarefa exigir)
 O `delegate` já carrega um método-padrão (aterrar na realidade, script determinístico,
 cirúrgico, pular-ambíguo, verificar). Além dele, considere acrescentar ao briefing conforme
