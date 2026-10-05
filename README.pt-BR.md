@@ -53,7 +53,14 @@ delegate --redo "faltou tratar o caso X; corrija e rode os testes de novo"
 
 **Tarefa longa multi-fase** (contexto limpo por fatia — o "clear+handoff" automático):
 ```bash
+claude-loop --help      # leia antes: responde sem iniciar agente (idem `delegate --help`)
+claude-loop --status    # já existe tarefa nesta pasta?
 claude-loop "migrar todo o projeto de CommonJS para ESM, fase a fase"
+claude-loop             # retoma o .handoff/state.md existente
+
+# Tarefa NOVA com um state.md antigo na pasta: dê a ela uma pasta própria. Passar objetivo
+# com state.md existente é recusado (exit 2) — o loop não troca de tarefa em silêncio.
+HANDOFF_DIR=.handoff/esm claude-loop "migrar para ESM"
 
 # Rodar numa OUTRA CONTA Claude (ex.: a conta "Fable"), e/ou com outro modelo:
 CLAUDE_CONFIG_DIR="$HOME/.claude-fable" CLAUDE_MODEL=opus claude-loop "objetivo"
@@ -100,3 +107,11 @@ visual (roda headless, não enxerga render) e julgamento de design — use você
 - `DELEGATE_TIMEOUT` (default `30m`) — timeout do print mode do `agy`
 - `HANDOFF_DIR` (default `.handoff`)
 - `MAX_ITERS` (default `20`) — teto do `claude-loop`
+
+A lista completa (com o valor em uso) e os códigos de saída estão em `claude-loop --help` e
+`delegate --help`. Nos dois, argumento desconhecido começando com `-` é erro (exit 2), nunca
+tarefa; `--` libera um objetivo/briefing que começa com hífen. **Exit 0 não quer dizer
+"pronto"**: olhe o topo do `state.md` (loop) ou o `git diff` (delegate).
+
+Testes do parse de argumentos (bash puro, com dublê no lugar do `claude`/`agy`):
+`bin/claude-loop.test.sh && bin/delegate.test.sh`.

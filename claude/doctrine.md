@@ -125,6 +125,9 @@ a tarefa — é mais barato você pedir certo do que descobrir o erro depois:
 
 **Tarefas longas multi-fase:** prefira rodar `claude-loop "objetivo"` (contexto
 limpo por fatia, estado em `.handoff/state.md`) a deixar um único contexto inchar.
+**`claude-loop --help` antes de usar** (e `claude-loop --status` para ver se já há tarefa na
+pasta). Tarefa nova = pasta própria: `HANDOFF_DIR=.handoff/<nome> claude-loop "objetivo"` — com
+um `state.md` já existente o objetivo novo é recusado, e sem argumento o loop retoma o antigo.
 **Por quê, já que ler o arquivo parece custar uma vez só:** cada turno reprocessa o contexto
 INTEIRO (mesmo com cache, ele conta). O arquivo aberto no começo de uma sessão longa é pago de
 novo em cada rodada seguinte — numa sessão de dezenas de turnos, dezenas de vezes. Ler menos uma

@@ -88,7 +88,7 @@ function handle(line) {
     if (name !== 'delegate') {
       return send({ jsonrpc: '2.0', id, error: { code: -32601, message: `Tool desconhecida: ${name}` } });
     }
-    const r = spawnSync(DELEGATE, [String(args.task || '')], {
+    const r = spawnSync(DELEGATE, ['--', String(args.task || '')], {
       cwd: args.cwd || process.cwd(),
       encoding: 'utf8',
       maxBuffer: 8 * 1024 * 1024,

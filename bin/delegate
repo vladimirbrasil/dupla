@@ -21,11 +21,7 @@
 #                                                            # conversa (--continue)
 #   echo "tarefa longa..." | delegate
 #
-# Overrides por env:
-#   DELEGATE_MODEL   slug do modelo no agy    (default: gemini-3.7-flash-high; ver `agy models`)
-#                    tarefa difícil/longa: DELEGATE_MODEL=gemini-3.8-flash-high
-#   DELEGATE_TIMEOUT timeout do print mode    (default: 30m)
-#   HANDOFF_DIR      pasta de estado          (default: .handoff)
+# Flags, variáveis de ambiente e códigos de saída: 'delegate --help' (fonte única).
 set -euo pipefail
 
 # --- parse de flags (em qualquer ordem, antes do briefing) ------------------
@@ -36,17 +32,64 @@ set -euo pipefail
 #       (o agente lembra o que já fez; passe só a correção, sem re-briefar tudo)
 THINK=""
 CONTINUE=""
+MODELO_PADRAO="gemini-3.7-flash-high"
+TIMEOUT_PADRAO="30m"
+HANDOFF_DIR="${HANDOFF_DIR:-.handoff}"
+
+ajuda() {
+  cat <<EOF
+delegate — entrega uma tarefa braçal ao Antigravity CLI (agy) e devolve só um resumo.
+
+USO
+  delegate "<briefing>"                 modelo de trabalho ($MODELO_PADRAO)
+  delegate --think low|med "<...>"      transform burro (renomear, mover, substituir)
+  delegate --think pro "<...>"          raciocínio puro, não execução
+  DELEGATE_MODEL=<slug> delegate "<...>"  outro modelo (ex.: tarefa difícil ou longa)
+  delegate --redo "<correção>"          continua a MESMA conversa (alias: --continue)
+  echo "<briefing>" | delegate          briefing por stdin
+  delegate -- "-briefing"               briefing que começa com hífen
+  delegate --help                       esta ajuda (não inicia nada)
+
+  Briefing longo: escreva num arquivo e passe "Execute o briefing em <caminho>".
+
+ATENÇÃO
+  • O agente roda com --dangerously-skip-permissions no diretório atual e EDITA arquivos.
+    Não edite o mesmo repo enquanto ele roda: ele regrava por cima.
+  • Exit 0 NÃO garante que deu certo: confira o efeito no disco (git status / git diff)
+    e revise o diff linha a linha — o resumo omite.
+  • Confira no stderr a linha "delegate: modelo = <slug>".
+
+SAÍDA
+  \$HANDOFF_DIR/agy-<data>-<hora>.txt   resposta completa do agente (.err = stderr)
+  exit 0 terminou · 1 agy falhou, devolveu vazio ou timeout (pode haver trabalho PARCIAL
+  no disco) · 2 uso inválido · 127 agy não instalado
+
+VARIÁVEIS DE AMBIENTE (valor em uso agora)
+  DELEGATE_MODEL=${DELEGATE_MODEL:-$MODELO_PADRAO}   ignorado com --think; ver 'agy models'
+  DELEGATE_TIMEOUT=${DELEGATE_TIMEOUT:-$TIMEOUT_PADRAO}                   timeout do print mode do agy
+  HANDOFF_DIR=$HANDOFF_DIR                   onde a saída é salva
+EOF
+}
+
 while [ $# -gt 0 ]; do
   case "${1:-}" in
     --think)            THINK="${2:-}"; shift 2 ;;
     --redo|--continue)  CONTINUE="--continue"; shift ;;
     -h|--help)          # responder AQUI — jamais mandar '--help' como tarefa ao agy
-                        echo "Uso: delegate [--think low|med|high|pro] [--redo] \"<briefing da tarefa>\"" ;
-                        echo "     (briefing longo: escreva em .handoff/BRIEFING-*.md e passe 'Execute o briefing em <path>')" ;
-                        exit 0 ;;
+                        ajuda; exit 0 ;;
+    --)                 shift; break ;;
+    -*)                 # idem para '--version', '--dry-run' etc.: nada que comece com '-'
+                        # segue como briefing, a não ser depois de '--'
+                        echo "delegate: opção desconhecida '${1%%$'\n'*}'. Veja: delegate --help" >&2
+                        echo "          (briefing que começa com hífen: delegate -- \"<briefing>\")" >&2
+                        exit 2 ;;
     *)                  break ;;
   esac
 done
+if [ $# -gt 1 ]; then
+  echo "delegate: $# argumentos; o briefing é UM só — faltaram as aspas? Veja: delegate --help" >&2
+  exit 2
+fi
 # Modelo default: **Gemini 3.7 Flash (High)** — 10/09/2026. Antes: 3.6 Flash (High) desde
 # 30/07/2026; antes disso, 3.1 Pro (High).
 #
@@ -81,13 +124,12 @@ case "$THINK" in
   med)      MODEL="gemini-3.7-flash-medium" ;;
   high)     MODEL="gemini-3.7-flash-high" ;;
   pro)      MODEL="gemini-3.1-pro-high" ;;   # escape hatch: raciocínio puro, não execução
-  "")       MODEL="${DELEGATE_MODEL:-gemini-3.7-flash-high}" ;;
+  "")       MODEL="${DELEGATE_MODEL:-$MODELO_PADRAO}" ;;
   *) echo "delegate: --think inválido '$THINK' (use low|med|high|pro)" >&2; exit 2 ;;
 esac
 case "$MODEL" in
   *3.5-flash*|*3\.5\ Flash*) echo "delegate: RECUSADO — '$MODEL' é o 3.5 Flash (incidente de 22/07/2026)." >&2; exit 2 ;;
 esac
-HANDOFF_DIR="${HANDOFF_DIR:-.handoff}"
 mkdir -p "$HANDOFF_DIR"
 TS="$(date +%Y%m%d-%H%M%S)"
 RESULT="$HANDOFF_DIR/agy-$TS.txt"
@@ -103,7 +145,7 @@ fi
 TASK="${1:-}"
 [ -z "$TASK" ] && TASK="$(cat)"   # aceita tarefa via stdin também
 if [ -z "$TASK" ]; then
-  echo "Uso: delegate [--think low|med|high|pro] [--redo] \"<briefing da tarefa>\"" >&2
+  echo "delegate: sem briefing. Uso: delegate [--think low|med|high|pro] [--redo] \"<briefing>\"   (veja delegate --help)" >&2
   exit 2
 fi
 
@@ -174,7 +216,7 @@ echo "delegate: modelo = $MODEL (agy ${AGY_VER:-?})" >&2
 # ⚠️ NÃO passar um `--print` solto: ele ACEITA VALOR (é alias de --prompt) e engolia o
 # `--dangerously-skip-permissions` como se fosse o prompt. `-p "$PROMPT"` já é o print mode.
 if ! agy --dangerously-skip-permissions $CONTINUE --model "$MODEL" --add-dir "$PWD" \
-        --print-timeout "${DELEGATE_TIMEOUT:-30m}" -p "$PROMPT" >"$RESULT" 2>"$ERR"; then
+        --print-timeout "${DELEGATE_TIMEOUT:-$TIMEOUT_PADRAO}" -p "$PROMPT" >"$RESULT" 2>"$ERR"; then
   echo "DELEGATE_FAILED — veja $ERR" >&2
   tail -n 20 "$ERR" >&2 || true
   exit 1

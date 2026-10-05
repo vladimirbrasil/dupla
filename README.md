@@ -64,6 +64,19 @@ delegate --redo "you missed case X; fix it and run the tests again"
 claude-loop "migrate the whole project from CommonJS to ESM, phase by phase"
 ```
 
+Read `claude-loop --help` and `delegate --help` first: both answer without starting an agent,
+and anything else that starts with `-` is rejected instead of being sent as the task (use `--`
+for a task that really begins with a hyphen). Two things the help spells out:
+
+- `claude-loop` with no argument **resumes** the existing `.handoff/state.md`. Passing a goal
+  while one exists is refused, so the loop never silently works on the old task. Give each new
+  task its own folder: `HANDOFF_DIR=.handoff/esm claude-loop "…"`. `claude-loop --status` shows
+  what is there.
+- Exit code 0 does not mean "done" for either tool: check the top of `state.md`, or the diff.
+
+Tests for the argument parsing (plain bash, a stub stands in for `claude`/`agy`):
+`bin/claude-loop.test.sh && bin/delegate.test.sh`.
+
 ## Notes
 
 - Comments, doctrine and benchmark notes are in Portuguese; `README.pt-BR.md` is the original

@@ -1,29 +1,8 @@
 #!/usr/bin/env bash
 # claude-loop — roda o Claude em CONTEXTOS LIMPOS sucessivos até a tarefa acabar.
-#
-# Realiza o seu ritual manual de "dar /clear + colar prompt de handoff", automático:
-# cada iteração é um 'claude -p' novo (janela limpa). O estado/handoff vive em
-# .handoff/state.md. O Claude lê o estado, executa a próxima fatia (delegando ao
-# 'delegate' quando for braçal), reescreve o estado e sai. A próxima volta nasce enxuta.
-#
-# Sinais que o Claude escreve no TOPO de state.md para encerrar o loop:
-#   TAREFA_COMPLETA              -> objetivo concluído e revisado
-#   PRECISA_HUMANO: <pergunta>   -> só então o loop para e te chama
-#
-# Uso:
-#   claude-loop "objetivo da tarefa longa"   # cria o state.md na 1ª vez
-#   claude-loop                              # retoma de um state.md existente
-#
-# Overrides por env:
-#   MAX_ITERS          teto de iterações (default: 20)
-#   HANDOFF_DIR        pasta de estado   (default: .handoff)
-#   AUTO_RESUME        1=ao bater no limite de uso, dorme até o reset e CONTINUA
-#                      sozinho; 0=pausa e sai (default: 1)
-#   AUTO_RESUME_PAD    segundos extras após o horário de reset (default: 90)
-#   AUTO_RESUME_MAX    teto de espera por pausa, em segundos (default: 25200 = 7h)
-#   AUTO_RESUME_FALLBACK  se não der pra ler o horário de reset, dorme estes
-#                      segundos e tenta de novo (default: 1800 = 30min, p/ nunca
-#                      morrer à noite; ponha 0/"" p/ sair com exit 3 ao não ler)
+# Cada volta é um 'claude -p' novo que lê $HANDOFF_DIR/state.md, executa a próxima fatia,
+# reescreve o estado e sai. Uso, variáveis e códigos de saída: ver 'claude-loop --help'
+# (a função ajuda() abaixo é a fonte única — não repetir aqui).
 set -euo pipefail
 
 # Qual binário/conta roda o loop. Alias do .bashrc (ex.: `claude-fable`) NÃO serve aqui — alias só
@@ -42,6 +21,134 @@ AUTO_RESUME="${AUTO_RESUME:-1}"
 AUTO_RESUME_PAD="${AUTO_RESUME_PAD:-90}"
 AUTO_RESUME_MAX="${AUTO_RESUME_MAX:-25200}"
 AUTO_RESUME_FALLBACK="${AUTO_RESUME_FALLBACK:-1800}"
+
+ajuda() {
+  cat <<EOF
+claude-loop — roda o Claude em contextos limpos sucessivos até a tarefa acabar.
+
+USO
+  claude-loop "objetivo"      começa uma tarefa (cria $STATE)
+  claude-loop                 retoma o state.md que já existe
+  claude-loop --status        mostra o estado atual (não inicia nada)
+  claude-loop --help          esta ajuda (não inicia nada)
+  claude-loop -- "-objetivo"  objetivo que começa com hífen
+
+ATENÇÃO — leia antes de rodar
+  • Cada volta é um 'claude --dangerously-skip-permissions -p': um agente autônomo,
+    sem pedir permissão, no diretório atual. Rode dentro do repo certo.
+  • Se já existe state.md, passar um objetivo é RECUSADO (exit 2): o loop não troca de
+    tarefa em silêncio. Para retomar a antiga, rode sem argumento. Para uma tarefa nova
+    sem tocar na antiga, dê a ela uma pasta própria:
+        HANDOFF_DIR=.handoff/minha-tarefa claude-loop "objetivo"
+  • O objetivo só é lido na criação do state.md; depois, quem manda é o state.md.
+  • O loop para e te chama (PRECISA_HUMANO) antes de deploy, push, gasto ou envio de
+    mensagem — a menos que o objetivo autorize isso explicitamente.
+  • Exit 0 NÃO significa "pronto": veja o topo do state.md.
+  • Cada volta é uma sessão inteira do Claude. O ganho é o contexto limpo por fatia;
+    o teto de custo é MAX_ITERS.
+
+COMO TERMINA
+  state.md com TAREFA_COMPLETA              concluído                    (exit 0)
+  state.md com PRECISA_HUMANO: <pergunta>   esperando você               (exit 0)
+  "Atingiu MAX_ITERS"                       NÃO concluiu; rode de novo   (exit 0)
+  o claude saiu com erro                    estado preservado            (exit 1)
+  sem objetivo e sem state.md / uso inválido                             (exit 2)
+  limite de uso sem poder esperar                                        (exit 3)
+
+ONDE OLHAR
+  \$HANDOFF_DIR/state.md          estado, reescrito a cada volta
+  \$HANDOFF_DIR/loop-iter-N.log   saída de cada volta (N recomeça em 1 a cada execução
+                                 e SOBRESCREVE os logs antigos)
+
+RODAR EM SEGUNDO PLANO / PARAR
+  Em primeiro plano ele segura o terminal por horas. Para deixar rodando:
+      nohup claude-loop "objetivo" > /tmp/claude-loop.out 2>&1 < /dev/null &   (ou tmux)
+  Parar: Ctrl-C, ou kill no claude-loop e no 'claude' filho. O estado fica no state.md;
+  'claude-loop' sem argumento retoma.
+
+VARIÁVEIS DE AMBIENTE (valor em uso agora)
+EOF
+  _var() { printf '  %-27s %s\n' "$1" "$2"; }
+  _var "MAX_ITERS=$MAX_ITERS" "teto de voltas"
+  _var "HANDOFF_DIR=$HANDOFF_DIR" "pasta de estado"
+  _var "CLAUDE_MODEL=$CLAUDE_MODEL" "modelo por rodada (vazio = o da conta)"
+  _var "CLAUDE_BIN=$CLAUDE_BIN" "binário"
+  _var "CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR:-}" "outra conta (alias de shell não funciona aqui)"
+  _var "AUTO_RESUME=$AUTO_RESUME" "1 = no limite de uso, dorme até o reset e continua a MESMA volta"
+  _var "" "(usar o Claude em outro terminal gasta a mesma cota); 0 = exit 3"
+  _var "AUTO_RESUME_PAD=$AUTO_RESUME_PAD" "segundos extras depois do horário de reset"
+  _var "AUTO_RESUME_MAX=$AUTO_RESUME_MAX" "teto de espera por pausa, em segundos"
+  _var "AUTO_RESUME_FALLBACK=$AUTO_RESUME_FALLBACK" "espera se não der para ler o horário (0/vazio = exit 3)"
+  cat <<EOF
+
+EXEMPLOS
+  claude-loop "migrar o projeto de CommonJS para ESM, fase a fase"
+  HANDOFF_DIR=.handoff/esm MAX_ITERS=8 claude-loop "\$(cat objetivo.txt)"
+  CLAUDE_CONFIG_DIR="\$HOME/.claude-outra" CLAUDE_MODEL=opus claude-loop "objetivo"
+EOF
+}
+
+# _resumo_estado — situação do state.md em poucas linhas (para --status e para a recusa).
+_resumo_estado() {
+  if [ ! -f "$STATE" ]; then
+    echo "  $STATE: não existe (nenhuma tarefa nesta pasta)"
+    return
+  fi
+  local sit="em andamento"
+  if grep -q "^TAREFA_COMPLETA" "$STATE"; then sit="TAREFA_COMPLETA"
+  elif grep -q "^PRECISA_HUMANO" "$STATE"; then sit="$(grep -m1 "^PRECISA_HUMANO" "$STATE" | cut -c1-200)"; fi
+  echo "  $STATE (modificado em $(date -r "$STATE" '+%d/%m/%Y %H:%M'))"
+  echo "  situação: $sit"
+  echo "  começo do arquivo:"
+  grep -v '^[[:space:]]*$' "$STATE" | head -n 4 | cut -c1-160 | sed 's/^/    | /'
+}
+
+# --- parse de argumentos — ANTES de criar pasta ou tocar em qualquer coisa -----------
+# Sem isto, 'claude-loop --help' virava OBJETIVO e disparava um agente sem permissões.
+# Regra: nada que comece com '-' vira objetivo, a não ser depois de '--'.
+uso_invalido() {
+  echo "claude-loop: $1" >&2
+  echo "Veja: claude-loop --help" >&2
+  exit 2
+}
+[ $# -eq 1 ] && [ "$1" = "help" ] && set -- --help
+GOAL=""
+N_POS=0
+ACAO="rodar"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) ACAO="ajuda"; shift ;;
+    --status)  ACAO="status"; shift ;;
+    --)        shift
+               while [ $# -gt 0 ]; do GOAL="$1"; N_POS=$((N_POS + 1)); shift; done ;;
+    -*)        uso_invalido "opção desconhecida '$1'. (Objetivo que começa com hífen: claude-loop -- \"$1\")" ;;
+    *)         GOAL="$1"; N_POS=$((N_POS + 1)); shift ;;
+  esac
+done
+if [ "$ACAO" = "ajuda" ]; then ajuda; exit 0; fi
+if [ "$ACAO" = "status" ]; then
+  echo "claude-loop · HANDOFF_DIR=$HANDOFF_DIR"
+  _resumo_estado
+  exit 0
+fi
+[ "$N_POS" -gt 1 ] && uso_invalido "$N_POS argumentos; o objetivo é UM só — faltaram as aspas?"
+
+# Objetivo novo + state.md existente: antes o objetivo era ignorado em silêncio e o loop
+# retomava a tarefa ANTIGA. Agora recusa e mostra o que está lá.
+if [ -n "$GOAL" ] && [ -f "$STATE" ]; then
+  {
+    echo "claude-loop: já existe uma tarefa em $STATE — o objetivo passado NÃO foi usado."
+    _resumo_estado
+    echo "Retomar essa tarefa:        claude-loop          (sem argumento)"
+    echo "Tarefa nova, outra pasta:   HANDOFF_DIR=$HANDOFF_DIR/<nome> claude-loop \"objetivo\""
+  } >&2
+  exit 2
+fi
+if [ -z "$GOAL" ] && [ ! -f "$STATE" ]; then
+  echo "claude-loop: sem objetivo e sem $STATE para retomar." >&2
+  echo "Uso: claude-loop \"objetivo da tarefa\"   (veja claude-loop --help)" >&2
+  exit 2
+fi
 mkdir -p "$HANDOFF_DIR"
 
 # _parse_reset — lê (via stdin) linhas de erro de limite do Claude e imprime os
@@ -94,8 +201,7 @@ if best is not None:
 PY
 }
 
-GOAL="${1:-}"
-if [ -n "$GOAL" ] && [ ! -f "$STATE" ]; then
+if [ ! -f "$STATE" ]; then
   cat >"$STATE" <<EOF
 # OBJETIVO
 $GOAL
@@ -106,11 +212,6 @@ $GOAL
 # PRÓXIMO PASSO
 Planejar e executar a primeira fatia.
 EOF
-fi
-
-if [ ! -f "$STATE" ]; then
-  echo "Uso: claude-loop \"objetivo da tarefa\"   (cria $STATE)" >&2
-  exit 2
 fi
 
 i=0
