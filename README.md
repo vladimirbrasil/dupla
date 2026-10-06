@@ -29,7 +29,6 @@ six-slice session cost ~6% of a weekly Claude limit.
 | `claude/doctrine.md` | The rules Claude follows: when to delegate, how to brief, and why the diff is always reviewed line by line — "the summary lies by omission". |
 | `bench/` | The benchmark that picks the default model. |
 | `install.sh` | Idempotent wiring: PATH symlinks, the doctrine import in `~/.claude/CLAUDE.md`, the MCP server, a global gitignore for `.handoff/`. |
-| `.claude-plugin/`, `skills/` | The same pieces packaged as a Claude Code plugin — an alternative to `install.sh` that touches no global file. |
 
 ## How the default model is chosen
 
@@ -51,31 +50,8 @@ Same capability, a quarter of the wall clock: 3.7 became the default.
 ```bash
 curl -fsSL https://antigravity.google/cli/install.sh | bash   # installs agy
 agy                                                            # log in once
+git clone https://github.com/vladimirbrasil/dupla.git && bash dupla/install.sh   # wire dupla (idempotent)
 ```
-
-Then wire dupla into Claude Code **one** of two ways (not both — you would get the MCP tool twice):
-
-**As a plugin** — nothing outside Claude Code's plugin directory is touched, and
-`claude plugin uninstall dupla@dupla` removes it:
-
-```bash
-claude plugin marketplace add vladimirbrasil/dupla
-claude plugin install dupla@dupla
-```
-
-`delegate` and `claude-loop` are then on the PATH of Claude's Bash tool (not of your own
-shell), the MCP tool is registered (needs `node`), and the rules load as a skill when a task
-looks delegable (~140 tokens per session until then).
-
-**With `install.sh`** — the rules are imported into `~/.claude/CLAUDE.md`, so they are in
-context in every session, and the commands are on your own PATH too:
-
-```bash
-git clone https://github.com/vladimirbrasil/dupla.git && bash dupla/install.sh   # idempotent
-```
-
-It also adds `.handoff/` to your global gitignore and a desktop notification before
-auto-compact. With the plugin, add `.handoff/` to your gitignore yourself.
 
 Everything runs auto-approved (`agy --dangerously-skip-permissions`, `claude
 --dangerously-skip-permissions`). Use it on repositories you trust, with git as your undo.
