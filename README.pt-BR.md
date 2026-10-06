@@ -24,7 +24,29 @@ os projetos.
 ```bash
 curl -fsSL https://antigravity.google/cli/install.sh | bash   # instala o 'agy'
 agy                                                            # logar 1x (Google AI Pro)
-git clone https://github.com/vladimirbrasil/dupla.git && bash dupla/install.sh   # fia a dupla (idempotente)
+```
+
+Depois, ligue a dupla ao Claude Code de **um** dos dois jeitos (não os dois — a ferramenta MCP
+apareceria duas vezes):
+
+**Como plugin** — não toca em nada fora do diretório de plugins do Claude Code, e
+`claude plugin uninstall dupla@dupla` desfaz:
+
+```bash
+claude plugin marketplace add vladimirbrasil/dupla
+claude plugin install dupla@dupla
+```
+
+O `delegate` e o `claude-loop` ficam no PATH da ferramenta Bash do Claude (não no do seu
+shell), a ferramenta MCP é registrada (precisa de `node`) e as regras entram como skill quando
+a tarefa parece delegável (~140 tokens por sessão até lá). Com o plugin, ponha `.handoff/` no
+seu gitignore você mesmo.
+
+**Com o `install.sh`** — as regras são importadas no `~/.claude/CLAUDE.md` (ficam no contexto
+em toda sessão) e os comandos entram também no seu PATH:
+
+```bash
+git clone https://github.com/vladimirbrasil/dupla.git && bash dupla/install.sh   # idempotente
 ```
 
 O `install.sh` fia, nos locais globais:

@@ -1,0 +1,18 @@
+{
+  "name": "dupla",
+  "description": "Claude Code delegates mechanical, token-heavy work to Google's Antigravity CLI (agy, Gemini Flash) and gets back only a short summary. Ships the `delegate` and `claude-loop` commands, a `delegate` MCP tool and the delegation rules as a skill.",
+  "author": {
+    "name": "Vladimir Brasil",
+    "url": "https://github.com/vladimirbrasil"
+  },
+  "homepage": "https://github.com/vladimirbrasil/dupla",
+  "repository": "https://github.com/vladimirbrasil/dupla",
+  "license": "MIT",
+  "keywords": ["delegation", "antigravity", "gemini", "tokens", "subagent"],
+  "mcpServers": {
+    "dupla": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/delegate-mcp.js"]
+    }
+  }
+}
