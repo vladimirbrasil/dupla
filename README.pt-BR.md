@@ -1,7 +1,7 @@
 # dupla — Claude (cérebro) ↔ Antigravity (operário)
 
 Mecanismo **global** para o Claude Code delegar tarefas braçais/pesadas ao
-**Antigravity CLI (`agy`)** — Flash, thinking LOW —, revisar o resultado e
+**Antigravity CLI (`agy`)** — Gemini Flash —, revisar o resultado e
 seguir, **sem você servir de leva-e-traz**. Instala uma vez, vale em **todos**
 os projetos.
 

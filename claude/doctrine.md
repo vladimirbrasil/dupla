@@ -14,7 +14,7 @@ em massa de código, refac mecânico, processar arquivos grandes, loops repetiti
 1. **Não faça você mesmo.** Escreva um briefing claro e acionável — objetivo,
    contexto mínimo, **caminhos de arquivo**, entregável esperado — e rode:
    `delegate "<briefing>"`
-2. O `delegate` roda o agente (Pro 3.1, thinking LOW) em modo automático, salva o
+2. O `delegate` roda o agente em modo automático, salva o
    trabalho completo no disco e te devolve **só um resumo**. O diff/saída crua
    fica em `.handoff/` — abra o arquivo real **apenas se a revisão exigir**.
 3. **Revise** o resumo. Se bom, siga. Se ruim, re-delegue com correções.
@@ -96,7 +96,7 @@ regrava o arquivo por cima: uma correção sua some sem aviso e reaparece a vers
 terminar, ou mande a correção pelo `--redo`.
 
 ### Revisão obrigatória do diff (não confie no resumo)
-O resumo do Pro 3.1 ainda pode falhar. Após delegar tarefa mecânica/arriscada, rode
+O resumo do agente ainda pode falhar. Após delegar tarefa mecânica/arriscada, rode
 `git diff` e **revise linha-a-linha** — procure lixo no fim de arquivo, `var()` quebrado,
 blocos duplicados, mudanças não-pedidas. O `delegate` já manda o agente escrever um
 **script determinístico** (não editar no olho) e auto-conferir o diff; ainda assim, a

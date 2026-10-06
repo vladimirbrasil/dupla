@@ -58,7 +58,7 @@ function handle(line) {
         tools: [{
           name: 'delegate',
           description:
-            'Entrega uma tarefa braçal/pesada em tokens ao Antigravity CLI (agy, Flash LOW), ' +
+            'Entrega uma tarefa braçal/pesada em tokens ao Antigravity CLI (agy, Gemini Flash), ' +
             'headless e auto-aprovado, na assinatura Google AI Pro (sem API paga). O agente ' +
             'planeja, edita arquivos, RODA comandos e verifica no disco, e devolve SÓ um resumo ' +
             'curto (o diff/saída crua fica em .handoff/). Use para refac mecânico, edição em ' +

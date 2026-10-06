@@ -27,7 +27,7 @@ done
 
 # 2) (sem config do gemini) ---------------------------------------------------
 # O agy não precisa de alias em arquivo: o delegate escolhe o modelo via
-# --model "Gemini 3.5 Flash (Low|Medium|High)" direto na linha de comando.
+# --model <slug> direto na linha de comando (ver 'agy models').
 
 # 3) Import da doutrina no CLAUDE.md global -----------------------------------
 mkdir -p "$(dirname "$CLAUDE_MD")"
