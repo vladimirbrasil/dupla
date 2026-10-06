@@ -227,6 +227,9 @@ fi
 if [ ! -s "$RESULT" ] || grep -qi "timeout waiting for response" "$RESULT"; then
   echo "DELEGATE_FAILED — agy devolveu vazio/timeout. Trabalho PARCIAL pode estar no disco:" >&2
   echo "  confira 'git status' antes de re-delegar; re-briefe só o que falta. Saída: $RESULT" >&2
+  # A causa, quando o agy a diz, está no stderr (503 do serviço, login vencido) — mostrar aqui
+  # poupa uma ida ao arquivo. Stderr vazio = o agente trabalhou e encerrou sem resposta.
+  if [ -s "$ERR" ]; then echo "  stderr do agy ($ERR):" >&2; tail -n 20 "$ERR" >&2; fi
   exit 1
 fi
 

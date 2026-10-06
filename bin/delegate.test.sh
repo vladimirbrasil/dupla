@@ -17,6 +17,8 @@ cat >"$RAIZ/bin/agy" <<'EOF2'
 #!/usr/bin/env bash
 if [ "${1:-}" = "--version" ]; then echo "agy 9.9.9"; exit 0; fi
 printf '%s\n' "$@" >>"$DUBLE_LOG"
+# o agy às vezes sai com 0, sem resposta, e a causa só no stderr (503, login vencido)
+if [ -n "${DUBLE_STDERR:-}" ]; then echo "$DUBLE_STDERR" >&2; exit 0; fi
 echo "resumo do dublê"
 EOF2
 chmod +x "$RAIZ/bin/agy"
@@ -75,6 +77,10 @@ espera_rc 0; recebeu "- item um"
 caso "--think e --redo continuam valendo"
 roda --think low --redo "corrija X"
 espera_rc 0; recebeu "corrija X"; recebeu "--continue"; recebeu "gemini-3.7-flash-low"
+
+caso "resposta vazia com exit 0: falha e mostra o stderr do agy"
+DUBLE_STDERR="Error: Eligibility check failed: UNAVAILABLE (code 503)" roda "tarefa"
+espera_rc 1; contem "DELEGATE_FAILED"; contem "UNAVAILABLE (code 503)"
 
 echo
 if [ "$FALHAS" -eq 0 ]; then
