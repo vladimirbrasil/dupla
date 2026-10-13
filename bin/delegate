@@ -32,7 +32,10 @@ set -euo pipefail
 #       (o agente lembra o que já fez; passe só a correção, sem re-briefar tudo)
 THINK=""
 CONTINUE=""
-MODELO_PADRAO="gemini-3.7-flash-high"
+# 13/10/2026: o agy 1.3.4 deixou de listar o 3.7 Flash (`agy models` só traz o 3.8); com o 3.7 aqui todo
+# delegate sem DELEGATE_MODEL falhava com exit 0 (3 vezes no mesmo dia, em duas sessões). Provisório até se
+# confirmar que a retirada é definitiva: se o 3.7 voltar, a bancada (bench/RESULTADOS.md) manda voltar para ele.
+MODELO_PADRAO="gemini-3.8-flash-high"
 TIMEOUT_PADRAO="30m"
 HANDOFF_DIR="${HANDOFF_DIR:-.handoff}"
 
@@ -120,9 +123,9 @@ fi
 # needle-in-haystack (MRCR v2). Use quando a tarefa for análise difícil, não execução
 # mecânica — e como segunda opinião de um modelo diferente num `--redo`.
 case "$THINK" in
-  low)      MODEL="gemini-3.7-flash-low" ;;
-  med)      MODEL="gemini-3.7-flash-medium" ;;
-  high)     MODEL="gemini-3.7-flash-high" ;;
+  low)      MODEL="gemini-3.8-flash-low" ;;
+  med)      MODEL="gemini-3.8-flash-medium" ;;
+  high)     MODEL="gemini-3.8-flash-high" ;;
   pro)      MODEL="gemini-3.1-pro-high" ;;   # escape hatch: raciocínio puro, não execução
   "")       MODEL="${DELEGATE_MODEL:-$MODELO_PADRAO}" ;;
   *) echo "delegate: --think inválido '$THINK' (use low|med|high|pro)" >&2; exit 2 ;;
