@@ -4,8 +4,9 @@
 > Pro/Ultra (login OAuth, sem API paga). Substituiu o gemini-cli, que a Google cortou
 > do tier individual/AI Pro em 18/06/2026 ("migrate to Antigravity"). O `agy` roda em
 > sandbox próprio — por isso o `delegate` passa `--add-dir "$PWD"` para ele enxergar o
-> projeto. Modelos: `--think low|med|high` → **Gemini 3.7 Flash** no esforço
-> correspondente (default `high`); `--think pro` → Gemini 3.1 Pro (High).
+> projeto. Modelos: `--think low|med|high` → **Gemini 3.8 Flash** no esforço
+> correspondente (default `low`). O agy 1.3.4 (13/10/2026) deixou de listar o 3.7 Flash e o
+> 3.1 Pro; `--think pro` é recusado.
 
 Quando uma tarefa for **braçal, repetitiva ou pesada em tokens** (geração/edição
 em massa de código, refac mecânico, processar arquivos grandes, loops repetitivos)
@@ -26,29 +27,31 @@ que são curtas o bastante para você fazer direto. A delegação é para o trab
 pesado: você é o cérebro e o revisor.
 
 ### Nível de raciocínio (`--think`) — escolha pelo tipo de tarefa
-- `delegate "<...>"` → **Gemini 3.7 Flash (High)**, o default. É o modelo de trabalho.
-- `delegate --think low|med "<...>"` → 3.7 Flash no esforço menor: transform burro (renomear,
-  mover, substituir string). Se a tarefa exige entender o que o código faz, fique no default —
-  a economia não paga o retrabalho.
-- `delegate --think pro "<...>"` → Gemini 3.1 Pro (High). **Só para raciocínio puro** (análise
-  difícil, comparar arquiteturas), onde ele ainda lidera por pouco (GPQA Diamond 95,5 × 94,4 do
-  3.8 Flash). Para *executar* código ele é pior e mais lento — não use como "modo caprichado".
-- `DELEGATE_MODEL=gemini-3.8-flash-high delegate "<...>"` → o Flash da geração seguinte, para
-  tarefa **difícil ou longa**. Não virou default porque na bancada ele empata e demora 3-4×
-  (ver abaixo); os benchmarks publicados só o separam do 3.7 no que é difícil de verdade
-  (Terminal-Bench 2.1 90,8 × 81,6; SWE-Bench Pro 61,6 × 60,4), porque ele "trabalha mais" —
-  mais passos e mais chamadas de ferramenta, que é de onde vem a lentidão.
+- `delegate "<...>"` → **Gemini 3.8 Flash (Low)**, o default. É o modelo de trabalho.
+- `delegate --think high "<...>"` → 3.8 Flash no esforço máximo, para tarefa **difícil ou longa**,
+  ou quando a revisão do diff mostrar retrabalho. Custa ~3× o relógio (e a cota) do low: é uma
+  decisão consciente, não o "modo caprichado". O high esgota a cota individual em poucas tarefas.
+- `delegate --think med "<...>"` → existe, mas na bancada gastou o relógio do high e entregou
+  pior. Sem motivo para escolher.
+- `delegate --think pro "<...>"` → **recusado** (exit 2). Apontava para o Gemini 3.1 Pro, que saiu
+  do agy; não há hoje modelo de "raciocínio puro" diferente dentro do Gemini.
+- `DELEGATE_MODEL=gpt-oss-120b-medium delegate "<...>"` → reserva **manual** quando o Gemini
+  devolver `RESOURCE_EXHAUSTED`: a cota dele é separada (uma observação, 13/10/2026). Qualidade
+  inferior — na bancada deixou a opção antiga no README e em `test/`, com tudo verde. Só para
+  transform simples, com revisão de diff redobrada.
 
-**Como se escolhe o default (e por que é 3.7 Flash High desde 10/09/2026).** A regra não é
-benchmark de marketing nem palpite: quando sai modelo novo, roda-se `dupla/bench/run.sh` e,
-entre os que entregam o **mesmo diff**, fica o **mais rápido**. As duas fixtures são armadilhas
-(chave de protocolo que não podia ser renomeada; refac N+1→lote com invariantes que **nenhum
-teste do repo cobria**, conferidos por um juiz oculto). Bancada de 10/09/2026, 2 rodadas,
-registrada em `dupla/bench/RESULTADOS.md`: **3.6, 3.7 e 3.8 Flash (High) passaram tudo com diff
-equivalente** — o relógio separou (3.7 ≈ 100s o par de fixtures, 3.6 ≈ 197s, 3.8 ≈ 345-441s), e
-o 3.8 ainda deixou, numa das rodadas, duas chamadas com a opção antiga em `test/` (verde, porque
-o default do config assume — o "verde que esconde"). Mesma capacidade, 1/4 do relógio ⇒ 3.7.
-A família Flash tinha passado à frente do 3.1 Pro em 30/07/2026 pelo mesmo critério.
+**Como se escolhe o default (e por que é 3.8 Flash Low desde 13/10/2026).** A regra não é
+benchmark de marketing nem palpite: quando sai modelo novo (ou some um), roda-se
+`dupla/bench/run.sh` e, entre os que entregam o **mesmo diff**, fica o **mais rápido** — e o
+relógio é também o proxy de cota, porque o agy não registra tokens. As duas fixtures são
+armadilhas (chave de protocolo que não podia ser renomeada; refac N+1→lote com invariantes que
+**nenhum teste do repo cobria**, conferidos por um juiz oculto). Bancada de 13/10/2026, rodada
+única, registrada em `dupla/bench/RESULTADOS.md`: **3.8 Flash Low fez as duas fixtures em 132s,
+3/3 e 5/5 do juiz, diff limpo**; o medium levou 336s só na primeira e deixou fallback morto; o
+high tinha feito 345-441s em 10/09. Mesmo diff, 1/3 do relógio ⇒ low.
+Histórico: 3.7 Flash High foi o default de 10/09 a 13/10/2026 (≈100s o par de fixtures, o mais
+rápido da época), até o agy parar de listá-lo; a família Flash tinha passado à frente do 3.1 Pro
+em 30/07/2026 pelo mesmo critério.
 
 **⚠️ O que continua proibido é o 3.5 Flash**, não a família Flash. A regra antiga "nunca Flash"
 nasceu de um incidente em 22/07/2026 com **Gemini 3.5 Flash (Low)**, que corrompeu a sintaxe de um
@@ -63,11 +66,11 @@ O script imprime `delegate: modelo = <slug> (agy <versão>)` no stderr — **con
 ### Escada de execução (economizar token de Opus) — regra permanente
 Antes de escrever código você mesmo, desça a escada:
 
-1. **`delegate`** (Antigravity/Gemini 3.7 Flash High, o default) — 1ª tentativa para qualquer
+1. **`delegate`** (Antigravity/Gemini 3.8 Flash Low, o default) — 1ª tentativa para qualquer
    trabalho de implementação: mecânico, repetitivo, multi-arquivo, extração/refac, escrever specs.
 2. **`delegate --redo "<correção>"`, ainda em Gemini** — se o agente entregar lixo, o primeiro
-   remédio é briefing melhor na mesma família, não modelo diferente. Se quiser variar de fato,
-   `--think pro` (3.1 Pro) muda o modelo sem sair do Gemini.
+   remédio é briefing melhor na mesma família, não modelo diferente. Se o low não der conta,
+   `--think high` sobe o esforço sem sair do Gemini.
 3. **Subagente Sonnet 5** (`Agent`, subagent_type `general-purpose`, model `sonnet`) — quando o
    `agy` inteiro está indisponível, ou a tarefa precisa das ferramentas do Claude Code. **Este é
    o degrau que custa token Anthropic** — é uma decisão consciente, não um automatismo.

@@ -76,7 +76,15 @@ espera_rc 0; recebeu "- item um"
 
 caso "--think e --redo continuam valendo"
 roda --think low --redo "corrija X"
-espera_rc 0; recebeu "corrija X"; recebeu "--continue"; recebeu "gemini-3.7-flash-low"
+espera_rc 0; recebeu "corrija X"; recebeu "--continue"; recebeu "gemini-3.8-flash-low"
+
+caso "sem --think nem DELEGATE_MODEL vai o default da bancada (3.8 Flash low)"
+DELEGATE_MODEL="" roda "tarefa"
+espera_rc 0; recebeu "gemini-3.8-flash-low"
+
+caso "--think pro é recusado sem chamar o agente (o 3.1 Pro saiu do agy)"
+roda --think pro "analise X"
+espera_rc 2; nao_chamou; pasta_vazia
 
 caso "resposta vazia com exit 0: falha e mostra o stderr do agy"
 DUBLE_STDERR="Error: Eligibility check failed: UNAVAILABLE (code 503)" roda "tarefa"

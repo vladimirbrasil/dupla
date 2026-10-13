@@ -9,6 +9,42 @@ difícil, não de que os modelos são iguais em tudo.
 Legenda: `f1` = rename com chave de protocolo intocável; `f2` = N+1→lote com juiz oculto
 (5 invariantes que nenhum teste do repo cobre).
 
+## 13/10/2026 — 3.8 Flash low × medium × GPT-OSS 120B → **default vira 3.8 Flash Low**
+
+agy 1.3.4, que deixou de listar o 3.7 Flash e o 3.1 Pro (`agy models` traz só 3.8 Flash
+low/medium/high, os Claude 5.5 e o GPT-OSS 120B). O 3.8 Flash High, default provisório do dia,
+esgotava a cota individual em poucas tarefas. Pergunta da rodada: qual esforço entrega o mesmo
+diff gastando menos? Rodada única. O agy não registra contagem de tokens; o relógio é o proxy
+de cota (mais passos e mais chamadas de ferramenta = mais tempo e mais cota).
+
+| modelo | f1 | f2 | total | testes | juiz | observação |
+|---|---|---|---|---|---|---|
+| gemini-3.8-flash-low | 62s | 70s | **132s** | 3/3 | 5/5 | limpo: README e `test/` renomeados, chave de fio com o valor certo |
+| gemini-3.8-flash-medium | 336s | — | — | 3/3 (f1) | — | f1 tão lento quanto o high, e com fallback morto `cfg.backoffBaseMs ?? cfg.retryDelayMs` em `legacy.js`; f2 **não rodou** (429, cota esgotada) |
+| gpt-oss-120b-medium | 250s | 53s | 303s | 3/3 | 5/5 | ⚠️ deixou a opção antiga no `README.md` e em 2 chamadas de `test/retry.test.js`; em `legacy.js` leu `cfg.retryDelayMs ?? cfg.backoffBaseMs` (nome antigo primeiro) |
+| gemini-3.8-flash-high (10/09, referência) | 260–332s | 85–109s | 345–441s | 3/3 | 5/5 | não rodado de novo, para poupar cota |
+
+**Decisão:** default = `gemini-3.8-flash-low`. Mesmo diff limpo do high em ~1/3 do relógio.
+`--think high` fica para tarefa difícil/longa, ou quando a revisão do diff mostrar retrabalho.
+
+**Medium não compensa** nesta amostra: gastou o relógio do high na f1 e entregou pior. É o
+mesmo desenho do 3.7 em 10/09 (medium foi o pior dos três esforços). Uma rodada só — não é
+veredito, mas não há motivo para escolhê-lo.
+
+**GPT-OSS 120B tem cota separada** (uma observação): rodou as duas fixtures logo depois de o
+Gemini devolver `RESOURCE_EXHAUSTED: Individual quota reached`. A qualidade é inferior (o
+"verde que esconde" na f1), então serve de reserva **manual** para transform simples quando o
+Gemini estiver sem cota, com revisão de diff redobrada — não de fallback automático:
+
+```sh
+DELEGATE_MODEL=gpt-oss-120b-medium delegate "<transform simples>"
+```
+
+**`--think pro` passa a ser recusado** (exit 2 com a saída indicada): o 3.1 Pro não existe mais
+no agy, e um slug inexistente falha com exit 0 e resposta vazia.
+
+**Pendente:** segunda rodada do low quando a cota voltar (esta foi única), e a f2 do medium.
+
 ## 10/09/2026 — 3.8 × 3.7 × 3.6 Flash (High) → **default vira 3.7 Flash High**
 
 agy 1.2.0. Todos passaram os 3 testes do repo e 5/5 do juiz oculto, com diff equivalente

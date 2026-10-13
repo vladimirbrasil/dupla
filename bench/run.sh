@@ -19,7 +19,7 @@
 #
 # Uso:
 #   ./run.sh                                  # roda os modelos default da bancada
-#   ./run.sh gemini-3.7-flash-high outro-slug # roda só esses (ver `agy models`)
+#   ./run.sh gemini-3.8-flash-high outro-slug # roda só esses (ver `agy models`)
 #
 # ⚠️ NÃO edite este arquivo enquanto uma rodada estiver em andamento: o bash relê o script
 # do disco conforme executa, e a edição desloca os offsets (10/09/2026 a rodada terminou
@@ -31,7 +31,7 @@ OUT="${BENCH_OUT:-${TMPDIR:-/tmp}/delegate-bench-$(date +%Y%m%d-%H%M%S)}"
 MODELOS=("$@")
 # Só Gemini por padrão: os modelos Claude do agy queimam a cota mais apertada do
 # Antigravity sem entregar mais (ver doctrine.md). Passe o slug na mão se quiser medi-los.
-[ ${#MODELOS[@]} -eq 0 ] && MODELOS=(gemini-3.7-flash-high gemini-3.7-flash-low gemini-3.8-flash-high)
+[ ${#MODELOS[@]} -eq 0 ] && MODELOS=(gemini-3.8-flash-low gemini-3.8-flash-medium gemini-3.8-flash-high)
 mkdir -p "$OUT"
 
 BRIEF1='Neste projeto (Node, testes com `node --test`):

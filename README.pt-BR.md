@@ -36,7 +36,7 @@ O `install.sh` fia, nos locais globais:
 | gitignore global | `.handoff/` |
 
 (O `agy` não precisa de config em arquivo: o `delegate` escolhe o modelo via
-`--model <slug>` (ver `agy models`; default `gemini-3.7-flash-high`) direto na linha de comando.)
+`--model <slug>` (ver `agy models`; default `gemini-3.8-flash-low`) direto na linha de comando.)
 
 ## Uso
 
@@ -90,10 +90,12 @@ como ferramenta nativa — o contrato "resumo enxuto" fica garantido no servidor
 
 `delegate` escolhe o thinking do Flash por tipo de tarefa:
 ```bash
-delegate "<tarefa>"                             # 3.7 Flash HIGH (default)
-delegate --think med  "<refac c/ julgamento>"   # MEDIUM (escopo, casos-limite)
-delegate --think high "<arquitetural>"          # HIGH
+delegate "<tarefa>"                             # 3.8 Flash LOW (default)
+delegate --think high "<difícil ou longa>"      # HIGH (~3× o relógio e a cota)
 ```
+(`--think med` existe, mas na bancada de 13/10/2026 gastou o mesmo que o high e entregou pior.
+`--think pro` é recusado: o Gemini 3.1 Pro saiu do `agy`.)
+
 O `delegate` injeta a **doutrina de casa** (aterrar na realidade, script
 determinístico idempotente, cirúrgico, pular-e-reportar, **verificar RODANDO**
 testes/build + `git diff`) — mas agora o `agy` *executa de verdade* esses passos
@@ -103,7 +105,7 @@ visual (roda headless, não enxerga render) e julgamento de design — use você
 
 ## Overrides
 
-- `DELEGATE_MODEL` (default `gemini-3.7-flash-high`) — ignorado se usar `--think`
+- `DELEGATE_MODEL` (default `gemini-3.8-flash-low`) — ignorado se usar `--think`
 - `DELEGATE_TIMEOUT` (default `30m`) — timeout do print mode do `agy`
 - `HANDOFF_DIR` (default `.handoff`)
 - `MAX_ITERS` (default `20`) — teto do `claude-loop`

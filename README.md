@@ -45,6 +45,14 @@ it in ~100 s against 345–441 s for 3.8 — which, in one run, also left two st
 that stayed green because a config default covered for them ("the green that hides").
 Same capability, a quarter of the wall clock: 3.7 became the default.
 
+In October 2026 `agy` 1.3.4 stopped listing 3.7 Flash (and 3.1 Pro), and 3.8 Flash High burned
+through the individual quota in a handful of tasks. The bench was run again across effort levels
+(single run; wall clock is the quota proxy, since `agy` does not report tokens): **3.8 Flash Low**
+did both fixtures in 132 s with a clean diff and 5/5 from the hidden judge, against 345–441 s for
+High; Medium took as long as High on the first fixture and left a dead fallback behind. Same
+diff, a third of the wall clock: **3.8 Flash Low is the current default**, with `--think high`
+for hard or long tasks.
+
 ## Install
 
 ```bash
