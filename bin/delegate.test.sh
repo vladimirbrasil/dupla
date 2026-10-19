@@ -17,6 +17,15 @@ cat >"$RAIZ/bin/agy" <<'EOF2'
 #!/usr/bin/env bash
 if [ "${1:-}" = "--version" ]; then echo "agy 9.9.9"; exit 0; fi
 printf '%s\n' "$@" >>"$DUBLE_LOG"
+# se DUBLE_QUOTA_MODEL estiver definido e o modelo chamado for ele, simula cota esgotada
+if [ -n "${DUBLE_QUOTA_MODEL:-}" ]; then
+  for arg in "$@"; do
+    if [ "$arg" = "$DUBLE_QUOTA_MODEL" ]; then
+      echo "RESOURCE_EXHAUSTED: Individual quota reached" >&2
+      exit 0
+    fi
+  done
+fi
 # o agy às vezes sai com 0, sem resposta, e a causa só no stderr (503, login vencido)
 if [ -n "${DUBLE_STDERR:-}" ]; then echo "$DUBLE_STDERR" >&2; exit 0; fi
 echo "resumo do dublê"
@@ -89,6 +98,14 @@ espera_rc 2; nao_chamou; pasta_vazia
 caso "resposta vazia com exit 0: falha e mostra o stderr do agy"
 DUBLE_STDERR="Error: Eligibility check failed: UNAVAILABLE (code 503)" roda "tarefa"
 espera_rc 1; contem "DELEGATE_FAILED"; contem "UNAVAILABLE (code 503)"
+
+caso "cota esgotada no 4 Argon alterna automaticamente para 3.8 Flash"
+DUBLE_QUOTA_MODEL="gemini-4-argon-low" DELEGATE_MODEL="" roda "tarefa com fallback"
+espera_rc 0; recebeu "gemini-4-argon-low"; recebeu "gemini-3.8-flash-low"; contem "alternando automaticamente para gemini-3.8-flash-low"; contem "resumo do dublê"
+
+caso "DELEGATE_QUOTA_FALLBACK=0 desativa o fallback automático de cota"
+DUBLE_QUOTA_MODEL="gemini-4-argon-low" DELEGATE_QUOTA_FALLBACK="0" DELEGATE_MODEL="" roda "tarefa sem fallback"
+espera_rc 1; recebeu "gemini-4-argon-low"; contem "DELEGATE_FAILED"
 
 echo
 if [ "$FALHAS" -eq 0 ]; then

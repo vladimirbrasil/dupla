@@ -4,9 +4,9 @@
 > Pro/Ultra (login OAuth, sem API paga). Substituiu o gemini-cli, que a Google cortou
 > do tier individual/AI Pro em 18/06/2026 ("migrate to Antigravity"). O `agy` roda em
 > sandbox próprio — por isso o `delegate` passa `--add-dir "$PWD"` para ele enxergar o
-> projeto. Modelos: `--think low|med|high` → **Gemini 3.8 Flash** no esforço
-> correspondente (default `low`). O agy 1.3.4 (13/10/2026) deixou de listar o 3.7 Flash e o
-> 3.1 Pro; `--think pro` é recusado.
+> projeto. Modelos: `--think low|med|high` → **Gemini 4 Argon** no esforço
+> correspondente (default `low`), com **fallback automático de cota** para **Gemini 3.8 Flash**.
+> `--think pro` é recusado.
 
 Quando uma tarefa for **braçal, repetitiva ou pesada em tokens** (geração/edição
 em massa de código, refac mecânico, processar arquivos grandes, loops repetitivos)
@@ -26,32 +26,32 @@ em massa de código, refac mecânico, processar arquivos grandes, loops repetiti
 que são curtas o bastante para você fazer direto. A delegação é para o trabalho
 pesado: você é o cérebro e o revisor.
 
-### Nível de raciocínio (`--think`) — escolha pelo tipo de tarefa
-- `delegate "<...>"` → **Gemini 3.8 Flash (Low)**, o default. É o modelo de trabalho.
-- `delegate --think high "<...>"` → 3.8 Flash no esforço máximo, para tarefa **difícil ou longa**,
-  ou quando a revisão do diff mostrar retrabalho. Custa ~3× o relógio (e a cota) do low: é uma
-  decisão consciente, não o "modo caprichado". O high esgota a cota individual em poucas tarefas.
-- `delegate --think med "<...>"` → existe, mas na bancada gastou o relógio do high e entregou
-  pior. Sem motivo para escolher.
+### Nível de raciocínio (`--think`) e Fallback Automático de Cota
+- `delegate "<...>"` → **Gemini 4 Argon (Low)**, o default. É o modelo de trabalho mais eficiente
+  (consome ~77% menos tokens de contexto que o 3.8 Flash Low para entregar o mesmo diff perfeito).
+- **Fallback automático de cota (`DELEGATE_QUOTA_FALLBACK=1`, ativo por padrão):** o Gemini 4 Argon
+  e o Gemini 3.8 Flash possuem cotas separadas no Antigravity. Se o Argon devolver
+  `RESOURCE_EXHAUSTED` / `429`, o próprio `delegate` alterna automaticamente na mesma chamada para o
+  `gemini-3.8-flash-*` equivalente (retomando com `--continue` caso já houvesse alteração parcial no
+  disco). Quando o Google unificar as cotas no futuro, basta ajustar `FALLBACK_COTA_SEPARADA="0"` em
+  `bin/delegate` (ou `DELEGATE_QUOTA_FALLBACK=0`).
+- `delegate --think high "<...>"` → esforço máximo, para tarefa **difícil ou longa**, ou quando a
+  revisão do diff mostrar retrabalho.
+- `delegate --think med "<...>"` → esforço intermediário (na bancada gastou 27% mais tokens que o
+  low sem ganho no diff final).
 - `delegate --think pro "<...>"` → **recusado** (exit 2). Apontava para o Gemini 3.1 Pro, que saiu
-  do agy; não há hoje modelo de "raciocínio puro" diferente dentro do Gemini.
-- `DELEGATE_MODEL=gpt-oss-120b-medium delegate "<...>"` → reserva **manual** quando o Gemini
-  devolver `RESOURCE_EXHAUSTED`: a cota dele é separada (uma observação, 13/10/2026). Qualidade
-  inferior — na bancada deixou a opção antiga no README e em `test/`, com tudo verde. Só para
-  transform simples, com revisão de diff redobrada.
+  do agy.
+- `DELEGATE_MODEL=gpt-oss-120b-medium delegate "<...>"` → terceira reserva **manual** se tanto o
+  Argon 4 quanto o Flash 3.8 esgotarem suas cotas: a cota dele também é separada. Qualidade
+  inferior — só para transform simples, com revisão de diff redobrada.
 
-**Como se escolhe o default (e por que é 3.8 Flash Low desde 13/10/2026).** A regra não é
-benchmark de marketing nem palpite: quando sai modelo novo (ou some um), roda-se
-`dupla/bench/run.sh` e, entre os que entregam o **mesmo diff**, fica o **mais rápido** — e o
-relógio é também o proxy de cota, porque o agy não registra tokens. As duas fixtures são
-armadilhas (chave de protocolo que não podia ser renomeada; refac N+1→lote com invariantes que
-**nenhum teste do repo cobria**, conferidos por um juiz oculto). Bancada de 13/10/2026, rodada
-única, registrada em `dupla/bench/RESULTADOS.md`: **3.8 Flash Low fez as duas fixtures em 132s,
-3/3 e 5/5 do juiz, diff limpo**; o medium levou 336s só na primeira e deixou fallback morto; o
-high tinha feito 345-441s em 10/09. Mesmo diff, 1/3 do relógio ⇒ low.
-Histórico: 3.7 Flash High foi o default de 10/09 a 13/10/2026 (≈100s o par de fixtures, o mais
-rápido da época), até o agy parar de listá-lo; a família Flash tinha passado à frente do 3.1 Pro
-em 30/07/2026 pelo mesmo critério.
+**Como se escolhe o default (e por que é Gemini 4 Argon Low desde 19/10/2026).** A filosofia é:
+*JAMAIS ter pressa, SEMPRE priorizar a economia de tokens/cota e buscar o melhor custo-benefício
+(qualidade / tokens).* Quando sai modelo novo, roda-se `dupla/bench/run.sh` (duas fixtures com
+armadilhas de contrato e juiz oculto) e audita-se o consumo real de tokens nos transcripts do `agy`.
+Em 19/10/2026 (`dupla/bench/RESULTADOS.md`), o **Gemini 4 Argon Low** gabaritou todos os testes e o
+juiz oculto consumindo apenas **165k tokens totais de contexto em 31 passos**, contra **713k tokens
+em 72 passos** do 3.8 Flash Low (77% de economia) e 136s vs 190s de relógio.
 
 **⚠️ O que continua proibido é o 3.5 Flash**, não a família Flash. A regra antiga "nunca Flash"
 nasceu de um incidente em 22/07/2026 com **Gemini 3.5 Flash (Low)**, que corrompeu a sintaxe de um
@@ -66,8 +66,9 @@ O script imprime `delegate: modelo = <slug> (agy <versão>)` no stderr — **con
 ### Escada de execução (economizar token de Opus) — regra permanente
 Antes de escrever código você mesmo, desça a escada:
 
-1. **`delegate`** (Antigravity/Gemini 3.8 Flash Low, o default) — 1ª tentativa para qualquer
-   trabalho de implementação: mecânico, repetitivo, multi-arquivo, extração/refac, escrever specs.
+1. **`delegate`** (Antigravity/Gemini 4 Argon Low, com fallback automático para 3.8 Flash Low) — 1ª
+   tentativa para qualquer trabalho de implementação: mecânico, repetitivo, multi-arquivo,
+   extração/refac, escrever specs.
 2. **`delegate --redo "<correção>"`, ainda em Gemini** — se o agente entregar lixo, o primeiro
    remédio é briefing melhor na mesma família, não modelo diferente. Se o low não der conta,
    `--think high` sobe o esforço sem sair do Gemini.

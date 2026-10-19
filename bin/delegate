@@ -34,6 +34,11 @@ CONTINUE=""
 # (gemini-4-argon-low). Entregou diff 100% limpo com 51k tokens de entrada e 165k de volume total de
 # contexto (contra 198k/713k do 3.8 Flash Low — 77% de economia de cota/tokens), e f2 em apenas 52s.
 MODELO_PADRAO="gemini-4-argon-low"
+# Fallback automático de cota: quando gerações distintas têm cotas separadas no Antigravity
+# (ex.: Gemini 4 Argon vs Gemini 3.8 Flash), ativar Fallback="1" permite que o delegate tente
+# automaticamente o modelo equivalente do 3.8 Flash se o Argon devolver RESOURCE_EXHAUSTED / 429.
+# Quando o Google unificar a cota de todos os modelos, basta mudar o default abaixo para "0" (ou vazio).
+FALLBACK_COTA_SEPARADA="${DELEGATE_QUOTA_FALLBACK:-1}"
 TIMEOUT_PADRAO="30m"
 HANDOFF_DIR="${HANDOFF_DIR:-.handoff}"
 
@@ -66,6 +71,7 @@ SAÍDA
 
 VARIÁVEIS DE AMBIENTE (valor em uso agora)
   DELEGATE_MODEL=${DELEGATE_MODEL:-$MODELO_PADRAO}   ignorado com --think; ver 'agy models'
+  DELEGATE_QUOTA_FALLBACK=$FALLBACK_COTA_SEPARADA          1 = cai p/ 3.8 Flash se cota do 4 Argon acabar (0 = desliga)
   DELEGATE_TIMEOUT=${DELEGATE_TIMEOUT:-$TIMEOUT_PADRAO}                   timeout do print mode do agy
   HANDOFF_DIR=$HANDOFF_DIR                   onde a saída é salva
 EOF
@@ -116,6 +122,18 @@ esac
 case "$MODEL" in
   *3.5-flash*|*3\.5\ Flash*) echo "delegate: RECUSADO — '$MODEL' é o 3.5 Flash (incidente de 22/07/2026)." >&2; exit 2 ;;
 esac
+
+# Determina o modelo de fallback caso a cota separada esteja ativa (FALLBACK_COTA_SEPARADA=1)
+# e o usuário não tenha fixado manualmente um DELEGATE_MODEL específico de outra família.
+FALLBACK_MODEL=""
+if [ "$FALLBACK_COTA_SEPARADA" = "1" ] && [ -z "${DELEGATE_MODEL:-}" ]; then
+  case "$MODEL" in
+    gemini-4-argon-low)    FALLBACK_MODEL="gemini-3.8-flash-low" ;;
+    gemini-4-argon-medium) FALLBACK_MODEL="gemini-3.8-flash-medium" ;;
+    gemini-4-argon-high)   FALLBACK_MODEL="gemini-3.8-flash-high" ;;
+  esac
+fi
+
 mkdir -p "$HANDOFF_DIR"
 TS="$(date +%Y%m%d-%H%M%S)"
 RESULT="$HANDOFF_DIR/agy-$TS.txt"
@@ -201,21 +219,55 @@ echo "delegate: modelo = $MODEL (agy ${AGY_VER:-?})" >&2
 # $CONTINUE (--continue) quando --redo: continua a última conversa, herdando contexto.
 # ⚠️ NÃO passar um `--print` solto: ele ACEITA VALOR (é alias de --prompt) e engolia o
 # `--dangerously-skip-permissions` como se fosse o prompt. `-p "$PROMPT"` já é o print mode.
-if ! agy --dangerously-skip-permissions $CONTINUE --model "$MODEL" --add-dir "$PWD" \
-        --print-timeout "${DELEGATE_TIMEOUT:-$TIMEOUT_PADRAO}" -p "$PROMPT" >"$RESULT" 2>"$ERR"; then
-  echo "DELEGATE_FAILED — veja $ERR" >&2
-  tail -n 20 "$ERR" >&2 || true
-  exit 1
+executa_agy() {
+  local mod="$1" out="$2" err="$3" cont="$4" prm="$5"
+  agy --dangerously-skip-permissions $cont --model "$mod" --add-dir "$PWD" \
+      --print-timeout "${DELEGATE_TIMEOUT:-$TIMEOUT_PADRAO}" -p "$prm" >"$out" 2>"$err"
+}
+
+bateu_cota() {
+  grep -qiE "RESOURCE_EXHAUSTED|quota.*reached|quota.*exceeded|rateLimitExceeded|code[=: ]+429|HTTP/2 429|status.*429" "$1" "$2" 2>/dev/null
+}
+
+GIT_ANTES="$(git status --porcelain 2>/dev/null || true)"
+
+AGY_OK=0
+if executa_agy "$MODEL" "$RESULT" "$ERR" "$CONTINUE" "$PROMPT"; then
+  if [ -s "$RESULT" ] && ! grep -qi "timeout waiting for response" "$RESULT"; then
+    AGY_OK=1
+  fi
 fi
 
-# agy às vezes sai com rc=0 mas resposta vazia ou "Error: timeout waiting for
-# response" — o trabalho PARCIAL pode ter ficado no disco. Falhar explícito.
-if [ ! -s "$RESULT" ] || grep -qi "timeout waiting for response" "$RESULT"; then
-  echo "DELEGATE_FAILED — agy devolveu vazio/timeout. Trabalho PARCIAL pode estar no disco:" >&2
-  echo "  confira 'git status' antes de re-delegar; re-briefe só o que falta. Saída: $RESULT" >&2
-  # A causa, quando o agy a diz, está no stderr (503 do serviço, login vencido) — mostrar aqui
-  # poupa uma ida ao arquivo. Stderr vazio = o agente trabalhou e encerrou sem resposta.
-  if [ -s "$ERR" ]; then echo "  stderr do agy ($ERR):" >&2; tail -n 20 "$ERR" >&2; fi
+# Se falhou (ou devolveu vazio) por cota esgotada e temos modelo reserva de cota separada:
+if [ "$AGY_OK" -eq 0 ] && [ -n "$FALLBACK_MODEL" ] && bateu_cota "$ERR" "$RESULT"; then
+  echo "delegate: cota esgotada em $MODEL; alternando automaticamente para $FALLBACK_MODEL..." >&2
+  mv "$ERR" "$ERR.primary" 2>/dev/null || true
+  mv "$RESULT" "$RESULT.primary" 2>/dev/null || true
+  GIT_DEPOIS="$(git status --porcelain 2>/dev/null || true)"
+  FALLBACK_CONTINUE="$CONTINUE"
+  FALLBACK_PROMPT="$PROMPT"
+  if [ "$GIT_ANTES" != "$GIT_DEPOIS" ] && [ -z "$FALLBACK_CONTINUE" ]; then
+    echo "delegate: trabalho parcial detectado no disco; retomando a mesma conversa (--continue) em $FALLBACK_MODEL." >&2
+    FALLBACK_CONTINUE="--continue"
+    FALLBACK_PROMPT="A execução anterior foi interrompida por limite de cota do modelo anterior no meio da tarefa. Continue de onde parou, revise o que já foi alterado com git status/git diff, conclua os itens restantes, rode os testes e entregue o resumo final seguindo as regras originais."
+  fi
+  echo "delegate: modelo = $FALLBACK_MODEL (fallback de cota; agy ${AGY_VER:-?})" >&2
+  if executa_agy "$FALLBACK_MODEL" "$RESULT" "$ERR" "$FALLBACK_CONTINUE" "$FALLBACK_PROMPT"; then
+    if [ -s "$RESULT" ] && ! grep -qi "timeout waiting for response" "$RESULT"; then
+      AGY_OK=1
+    fi
+  fi
+fi
+
+if [ "$AGY_OK" -eq 0 ]; then
+  if [ ! -s "$RESULT" ] || grep -qi "timeout waiting for response" "$RESULT"; then
+    echo "DELEGATE_FAILED — agy devolveu vazio/timeout. Trabalho PARCIAL pode estar no disco:" >&2
+    echo "  confira 'git status' antes de re-delegar; re-briefe só o que falta. Saída: $RESULT" >&2
+    if [ -s "$ERR" ]; then echo "  stderr do agy ($ERR):" >&2; tail -n 20 "$ERR" >&2; fi
+  else
+    echo "DELEGATE_FAILED — veja $ERR" >&2
+    tail -n 20 "$ERR" >&2 || true
+  fi
   exit 1
 fi
 
