@@ -111,6 +111,13 @@ nuvem: o agente prepara; você confere no log real que a 1ª tarefa completa rod
 libera o resto. (30/09/2026: o agente submeteu 5 kernels e encerrou; todos morreram em 1 min por um `\n` mal
 escapado no script gerado — o `py_compile` dele conferiu o gerador, não o gerado — e o vigia morreu junto com
 o agente. Uma noite de máquina perdida.)
+**O agente não dirige: quando a cota do Claude acaba, ele implementa, não fecha.** Fatia já desenhada pode seguir no
+`delegate`, mas o agente **não deploya, não commita como pronto, não marca "feito" no handoff** — o Opus revisa antes.
+(19/10/2026: 5 fatias com o agente dirigindo sozinho → 6 bugs de severidade alta, 4 deles já em produção, e "resumo
+falso" em **todas** as 5. Revisar depois custou ao Opus o mesmo que construir direto (~6M vs ~5,9M tokens
+equivalentes). Com o Opus briefando e revisando cada fatia na hora: 0 alta, resumo fiel. As altas foram achadas por
+sonda contra dado real, não pelos testes de mutação — o agente testa o que escreveu; o erro mora no que ele supôs.)
+Sem pressa, o padrão continua sendo esperar o reset da cota.
 **Pesquisa com citação: `conferir-citacoes <entregavel> <fontes>` antes de ler** (quando existir no PATH).
 Mesmo dia: citação "literal" que era paráfrase + "100% validado" falso; em 28/09, 6 de 10 DOIs errados.
 
