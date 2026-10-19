@@ -1,13 +1,40 @@
 # Bancada do `delegate` — resultados
 
 Registro das rodadas que decidiram (ou confirmaram) o modelo default do `delegate`.
-Critério: **entre os modelos que entregam o mesmo diff, fica o mais rápido.** As fixtures
-estão saturadas de propósito — quem passa, passa; o que separa é o relógio e o lixo deixado
-para trás. Quando a bancada empatar sempre, é sinal de que ela precisa de uma fixture mais
-difícil, não de que os modelos são iguais em tudo.
+
+### Filosofia e Critério de Decisão
+- **JAMAIS ter pressa:** tempo de relógio é apenas secundário ou proxy de turnos, nunca o objetivo final.
+- **SEMPRE priorizar a economia de tokens/cota:** o custo de contexto cumulativo é o recurso mais escasso.
+- **Custo-benefício (qualidade / tokens):** não buscamos "força bruta" que queima 3× a 5× mais tokens para obter 1% a mais de sofisticação cosmética. Buscamos o modelo de **maior rendimento por token** — aquele que atinge a precisão exigida (100% de testes e invariantes de contrato respeitados) com a maior sobriedade de passos, sem desperdiçar tokens de raciocínio inflados. Só vale adotar um modelo mais gastador se ele for **muito, muito melhor** nos testes que elaboramos.
 
 Legenda: `f1` = rename com chave de protocolo intocável; `f2` = N+1→lote com juiz oculto
 (5 invariantes que nenhum teste do repo cobre).
+
+## 19/10/2026 — 3.8 Flash Low × 4.0 Argon Low × 4.0 Argon Medium → **default vira Gemini 4 Argon Low**
+
+**Aplicação da Filosofia nesta Rodada:**
+> *"Qualidade robusta e suficiente com o menor gasto de tokens possível — zero pressa."*
+> Entrega correta de contratos e testes gastando a menor fatia da cota.
+
+Comparação direta entre a geração 3.8 Flash e a geração 4.0 Argon (`gemini-4-argon-*`). Além do tempo de relógio, foi realizada auditoria direta nos transcripts do `agy` (`~/.gemini/antigravity-cli/brain/*/transcript.jsonl`) medindo o consumo real de tokens (novos inputs, cache lido e outputs gerados) e passos/ferramentas:
+
+| modelo | f1 (tempo) | f2 (tempo) | tempo total | passos (f1+f2) | tool calls | tokens entrada novos | tokens cache lido | tokens saída | volume total de contexto | testes | juiz |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **gemini-4-argon-low** | 84s | 52s | **136s** | **31** (20+11) | **20** | **51.261** | **110.057** | **4.268** | **165.586** | 3/3 | 5/5 |
+| gemini-4-argon-medium | 68s | 86s | 154s | 32 (17+15) | 18 | 70.563 | 150.679 | 5.382 | 226.624 | 3/3 | 5/5 |
+| gemini-3.8-flash-low | 109s | 81s | 190s | 72 (46+26) | 34 | 198.783 | 509.150 | 5.518 | 713.451 | 3/3 | 5/5 |
+
+*(Todos entregaram diffs limpos e perfeitos: `legacy.js` preservado com valor correto na f1, e `Map` com ordenação/nulls na f2).*
+
+**Análise sob a ótica de máxima economia de tokens:**
+1. **O vencedor absoluto é o `gemini-4-argon-low`**:
+   - Gastou **~75% MENOS tokens de entrada novos** que o 3.8 Flash Low (51k vs 198k).
+   - O volume total processado na janela de contexto foi **4,3× MENOR** (165k vs 713k).
+   - Precisou de menos da metade dos passos (31 vs 72) e quase metade das chamadas de ferramentas (20 vs 34). O 3.8 dá muito mais voltas e re-inspeções para chegar ao mesmo lugar, acumulando histórico repetido no contexto.
+2. **Low vs Medium no Argon 4.0**:
+   - O **Argon Low** consumiu **27% menos tokens** que o Argon Medium (165k vs 226k) para entregar exatamente a mesma qualidade. O medium gasta mais tokens de pensamento/output sem ganho algum no diff final.
+3. **Decisão:**
+   - **`gemini-4-argon-low`** vence tanto no critério de tokens/eficiência quanto no critério de relógio. É o modelo mais sóbrio e econômico testado até hoje no `agy`.
 
 ## 13/10/2026 — 3.8 Flash low × medium × GPT-OSS 120B → **default vira 3.8 Flash Low**
 

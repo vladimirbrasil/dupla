@@ -76,11 +76,11 @@ espera_rc 0; recebeu "- item um"
 
 caso "--think e --redo continuam valendo"
 roda --think low --redo "corrija X"
-espera_rc 0; recebeu "corrija X"; recebeu "--continue"; recebeu "gemini-3.8-flash-low"
+espera_rc 0; recebeu "corrija X"; recebeu "--continue"; recebeu "gemini-4-argon-low"
 
-caso "sem --think nem DELEGATE_MODEL vai o default da bancada (3.8 Flash low)"
+caso "sem --think nem DELEGATE_MODEL vai o default da bancada (4.0 Argon low)"
 DELEGATE_MODEL="" roda "tarefa"
-espera_rc 0; recebeu "gemini-3.8-flash-low"
+espera_rc 0; recebeu "gemini-4-argon-low"
 
 caso "--think pro é recusado sem chamar o agente (o 3.1 Pro saiu do agy)"
 roda --think pro "analise X"

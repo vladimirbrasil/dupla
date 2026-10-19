@@ -31,7 +31,7 @@ OUT="${BENCH_OUT:-${TMPDIR:-/tmp}/delegate-bench-$(date +%Y%m%d-%H%M%S)}"
 MODELOS=("$@")
 # Só Gemini por padrão: os modelos Claude do agy queimam a cota mais apertada do
 # Antigravity sem entregar mais (ver doctrine.md). Passe o slug na mão se quiser medi-los.
-[ ${#MODELOS[@]} -eq 0 ] && MODELOS=(gemini-3.8-flash-low gemini-3.8-flash-medium gemini-3.8-flash-high)
+[ ${#MODELOS[@]} -eq 0 ] && MODELOS=(gemini-4-argon-low gemini-4-argon-medium gemini-3.8-flash-low)
 mkdir -p "$OUT"
 
 BRIEF1='Neste projeto (Node, testes com `node --test`):

@@ -36,7 +36,7 @@ O `install.sh` fia, nos locais globais:
 | gitignore global | `.handoff/` |
 
 (O `agy` não precisa de config em arquivo: o `delegate` escolhe o modelo via
-`--model <slug>` (ver `agy models`; default `gemini-3.8-flash-low`) direto na linha de comando.)
+`--model <slug>` (ver `agy models`; default `gemini-4-argon-low`) direto na linha de comando.)
 
 ## Uso
 

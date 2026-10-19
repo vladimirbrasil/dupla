@@ -46,12 +46,11 @@ that stayed green because a config default covered for them ("the green that hid
 Same capability, a quarter of the wall clock: 3.7 became the default.
 
 In October 2026 `agy` 1.3.4 stopped listing 3.7 Flash (and 3.1 Pro), and 3.8 Flash High burned
-through the individual quota in a handful of tasks. The bench was run again across effort levels
-(single run; wall clock is the quota proxy, since `agy` does not report tokens): **3.8 Flash Low**
-did both fixtures in 132 s with a clean diff and 5/5 from the hidden judge, against 345–441 s for
-High; Medium took as long as High on the first fixture and left a dead fallback behind. Same
-diff, a third of the wall clock: **3.8 Flash Low is the current default**, with `--think high`
-for hard or long tasks.
+through the individual quota in a handful of tasks. On 19/10/2026, with the arrival of the Gemini 4
+Argon family, the bench was audited against raw token metrics: **Gemini 4 Argon Low** solved both
+fixtures in 136 s using **77% fewer context tokens** (165k vs 713k) and 31 steps (vs 72) compared to
+3.8 Flash Low, with 5/5 on the hidden judge. **Gemini 4 Argon Low is the current default**, with
+`--think high` for hard or long tasks.
 
 ## Install
 

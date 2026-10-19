@@ -30,10 +30,10 @@ set -euo pipefail
 #       (o agente lembra o que já fez; passe só a correção, sem re-briefar tudo)
 THINK=""
 CONTINUE=""
-# 13/10/2026: o agy 1.3.4 deixou de listar o 3.7 Flash (`agy models` só traz o 3.8). Entre os esforços do
-# 3.8, a bancada do mesmo dia (bench/RESULTADOS.md) deu o LOW: mesmo diff limpo do high em ~1/3 do relógio —
-# e relógio aqui é o proxy de cota, que o high esgotava em poucas tarefas. Se o 3.7 voltar, rode a bancada.
-MODELO_PADRAO="gemini-3.8-flash-low"
+# 19/10/2026: bancada com medição real de tokens (bench/RESULTADOS.md) elegeu o Gemini 4 Argon Low
+# (gemini-4-argon-low). Entregou diff 100% limpo com 51k tokens de entrada e 165k de volume total de
+# contexto (contra 198k/713k do 3.8 Flash Low — 77% de economia de cota/tokens), e f2 em apenas 52s.
+MODELO_PADRAO="gemini-4-argon-low"
 TIMEOUT_PADRAO="30m"
 HANDOFF_DIR="${HANDOFF_DIR:-.handoff}"
 
@@ -43,7 +43,7 @@ delegate — entrega uma tarefa braçal ao Antigravity CLI (agy) e devolve só u
 
 USO
   delegate "<briefing>"                 modelo de trabalho ($MODELO_PADRAO)
-  delegate --think high "<...>"         tarefa difícil/longa, ou retrabalho no diff (~3× a cota)
+  delegate --think high "<...>"         tarefa difícil/longa, ou retrabalho no diff
   DELEGATE_MODEL=<slug> delegate "<...>"  outro modelo (ex.: tarefa difícil ou longa)
   delegate --redo "<correção>"          continua a MESMA conversa (alias: --continue)
   echo "<briefing>" | delegate          briefing por stdin
@@ -90,45 +90,25 @@ if [ $# -gt 1 ]; then
   echo "delegate: $# argumentos; o briefing é UM só — faltaram as aspas? Veja: delegate --help" >&2
   exit 2
 fi
-# Modelo default: **Gemini 3.8 Flash (Low)** — 13/10/2026, quando o agy 1.3.4 parou de listar o
-# 3.7 Flash e o 3.1 Pro. Bancada do dia (rodada única): 3.8 low = 132s as duas fixtures, 3/3 e
-# 5/5 do juiz oculto, diff limpo; 3.8 medium levou 336s só na f1 (igual ao high) e deixou
-# fallback morto; 3.8 high tinha feito 345-441s em 10/09. Mesmo diff, ~1/3 do relógio ⇒ default.
-# `--think high` fica para tarefa difícil/longa ou quando a revisão do diff mostrar retrabalho.
+# Modelo default: **Gemini 4 Argon (Low)** — eleito em 19/10/2026.
+# Na bancada (bench/RESULTADOS.md), foi o modelo mais econômico em tokens/cota:
+# consumiu 77% menos tokens de contexto que o 3.8 Flash Low (165k vs 713k) e resolveu
+# as duas fixtures com 31 passos (contra 72 passos do 3.8), gabaritando 3/3 testes e 5/5
+# no juiz oculto.
 #
-# Histórico — default anterior: Gemini 3.7 Flash (High), de 10/09 a 13/10/2026. Antes: 3.6 Flash
-# (High) desde 30/07/2026; antes disso, 3.1 Pro (High). O raciocínio daquela escolha:
+# Histórico de defaults anteriores:
+#   - Gemini 3.8 Flash (Low): 13/10 a 19/10/2026 (substituiu o 3.7 Flash)
+#   - Gemini 3.7 Flash (High): 10/09 a 13/10/2026
+#   - Gemini 3.6 Flash (High): 30/07 a 10/09/2026
+#   - Gemini 3.1 Pro (High): antes de 30/07/2026
 #
-# A regra que decide o default é sempre a mesma: rodar `bench/run.sh` e, entre os modelos
-# que entregam o MESMO diff, ficar com o mais rápido. Bancada de 10/09/2026 (2 rodadas,
-# fixtures em bench/, resultados em bench/RESULTADOS.md): 3.6, 3.7 e 3.8
-# Flash (High) passaram os 3 testes e 5/5 do juiz oculto, com diff equivalente — e o
-# relógio separou: 3.7 ≈ 100s as duas fixtures, 3.6 ≈ 197s, 3.8 ≈ 345-441s. O 3.8 ainda
-# deixou, numa das rodadas, duas chamadas com a opção antiga em test/ (passa nos testes
-# porque o default do config assume; é exatamente o "verde que esconde") — o 3.7 não
-# errou em nenhuma. Mesma capacidade, 1/4 do relógio ⇒ default.
-#
-# Quando usar o 3.8: ele lidera os benchmarks publicados nas tarefas DIFÍCEIS (Terminal-
-# Bench 2.1 90,8 × 81,6 do 3.7; SWE-Bench Pro 61,6 × 60,4) porque "trabalha mais" — mais
-# passos de raciocínio e mais chamadas de ferramenta, que é de onde vem a lentidão. A
-# bancada é fácil demais para enxergar essa diferença. Para tarefa grande/difícil, o
-# escape hatch é por env, sem nova flag:
-#     DELEGATE_MODEL=gemini-3.8-flash-high delegate "<briefing>"
-#
-# ⚠️ O que continua PROIBIDO é o **3.5 Flash** (geração anterior): foi ele que, em
-# 22/07/2026, corrompeu a sintaxe de um arquivo do front (deixou `})` órfão em nível de
-# módulo, quebrando o bundle) e ainda reportou "verificado, testes verdes" tendo rodado
-# uma suíte que nem importava o arquivo editado. A regra "nunca Flash" nasceu daquele
-# incidente e era sobre AQUELE modelo — não sobre a família.
-#
-# `--think pro` apontava para o Gemini 3.1 Pro, que o agy 1.3.4 não lista mais. Em vez de mandar
-# um slug inexistente (o agy falha com exit 0 e resposta vazia), a flag é recusada com a saída.
+# `--think pro` apontava para o Gemini 3.1 Pro, que o agy não lista mais.
 case "$THINK" in
-  low)      MODEL="gemini-3.8-flash-low" ;;
-  med)      MODEL="gemini-3.8-flash-medium" ;;
-  high)     MODEL="gemini-3.8-flash-high" ;;
+  low)      MODEL="gemini-4-argon-low" ;;
+  med)      MODEL="gemini-4-argon-medium" ;;
+  high)     MODEL="gemini-4-argon-high" ;;
   pro)      echo "delegate: RECUSADO — '--think pro' usava o Gemini 3.1 Pro, que saiu do agy (13/10/2026; 'agy models' não o lista)." >&2
-            echo "           Use '--think high' (Gemini 3.8 Flash High) ou DELEGATE_MODEL=<slug de 'agy models'>." >&2
+            echo "           Use '--think high' (Gemini 4 Argon High) ou DELEGATE_MODEL=<slug de 'agy models'>." >&2
             exit 2 ;;
   "")       MODEL="${DELEGATE_MODEL:-$MODELO_PADRAO}" ;;
   *) echo "delegate: --think inválido '$THINK' (use low|med|high)" >&2; exit 2 ;;
