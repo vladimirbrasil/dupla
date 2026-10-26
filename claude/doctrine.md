@@ -35,8 +35,10 @@ pesado: você é o cérebro e o revisor.
   `gemini-3.8-flash-*` equivalente (retomando com `--continue` caso já houvesse alteração parcial no
   disco). Quando o Google unificar as cotas no futuro, basta ajustar `FALLBACK_COTA_SEPARADA="0"` em
   `bin/delegate` (ou `DELEGATE_QUOTA_FALLBACK=0`).
-- `delegate --think high "<...>"` → esforço máximo, para tarefa **difícil ou longa**, ou quando a
-  revisão do diff mostrar retrabalho.
+- **Regra (Vladimir, 26/10/2026): use SEMPRE o default (low), inclusive no `claude-loop` e em tarefa
+  longa ou multi-arquivo.** Esforço alto gasta muito mais token e quase não muda o resultado na bancada.
+  Se o low falhar, o remédio é briefing melhor (`--redo`), não esforço maior.
+- `delegate --think high "<...>"` → só com pedido explícito do Vladimir.
 - `delegate --think med "<...>"` → esforço intermediário (na bancada gastou 27% mais tokens que o
   low sem ganho no diff final).
 - `delegate --think pro "<...>"` → **recusado** (exit 2). Apontava para o Gemini 3.1 Pro, que saiu
@@ -70,8 +72,8 @@ Antes de escrever código você mesmo, desça a escada:
    tentativa para qualquer trabalho de implementação: mecânico, repetitivo, multi-arquivo,
    extração/refac, escrever specs.
 2. **`delegate --redo "<correção>"`, ainda em Gemini** — se o agente entregar lixo, o primeiro
-   remédio é briefing melhor na mesma família, não modelo diferente. Se o low não der conta,
-   `--think high` sobe o esforço sem sair do Gemini.
+   remédio é briefing melhor na mesma família, não modelo diferente. Não suba para `--think high`
+   (ver a regra do low acima).
 3. **Subagente Sonnet 5** (`Agent`, subagent_type `general-purpose`, model `sonnet`) — quando o
    `agy` inteiro está indisponível, ou a tarefa precisa das ferramentas do Claude Code. **Este é
    o degrau que custa token Anthropic** — é uma decisão consciente, não um automatismo.
@@ -127,7 +129,7 @@ cirúrgico, pular-ambíguo, verificar). Além dele, considere acrescentar ao bri
 a tarefa — é mais barato você pedir certo do que descobrir o erro depois:
 - **Código com testes/build** → "rode os testes/build e itere até passar; cole a saída real".
 - **Mudança repo-wide** → "grep TODAS as ocorrências antes; não deixe arquivo de fora".
-- **Feature multi-arquivo** → "liste um plano curto antes de executar" + `--think high`.
+- **Feature multi-arquivo** → "liste um plano curto antes de executar" (default low, sem `--think`).
 - **Migração/codemod re-rodável** → "script idempotente".
 - **Seguir convenção existente** → aponte os arquivos-modelo a ler.
 - **Precisa de verificação VISUAL** (layout/render 390px/console) → o `delegate` **NÃO
