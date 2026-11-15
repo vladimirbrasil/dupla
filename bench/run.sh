@@ -68,8 +68,10 @@ roda() {                      # roda <fixture> <slug> <tag>
       "$DELEGATE" "$brief" >"$OUT/$fx-$tag.saida" 2>"$OUT/$fx-$tag.err" )
   local rc=$?
   local fim; fim=$(date +%s)
+  local tok; tok=$(node "$BENCH/tokens.js" "$ini" "$fim")
   {
     echo "=== $fx  modelo=$slug  rc=$rc  $((fim-ini))s ==="
+    echo "$tok"
     ( cd "$dir" && npm test 2>&1 | grep -E "^# (tests|pass|fail)" )
     if [ "$fx" = f2 ]; then
       echo "--- juiz oculto (invariantes que nenhum teste do repo cobre) ---"
@@ -81,7 +83,7 @@ roda() {                      # roda <fixture> <slug> <tag>
     echo "--- diff ---"
     ( cd "$dir" && git diff )
   } > "$OUT/VEREDITO-$fx-$tag.txt" 2>&1
-  echo "  $fx/$slug: rc=$rc $((fim-ini))s"
+  echo "  $fx/$slug: rc=$rc $((fim-ini))s  $tok"
 }
 
 echo "bancada em $OUT"
@@ -93,4 +95,5 @@ done
 echo
 echo "=== PLACAR ==="
 grep -H PLACAR_OCULTO "$OUT"/VEREDITO-f2-*.txt 2>/dev/null
+grep -H "^TOKENS" "$OUT"/VEREDITO-*.txt 2>/dev/null
 echo "vereditos completos em $OUT/VEREDITO-*.txt"
