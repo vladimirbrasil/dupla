@@ -36,7 +36,7 @@ O `install.sh` fia, nos locais globais:
 | gitignore global | `.handoff/` |
 
 (O `agy` não precisa de config em arquivo: o `delegate` escolhe o modelo via
-`--model <slug>` (ver `agy models`; default `gemini-4-argon-low`) direto na linha de comando.)
+`--model <slug>` (ver `agy models`; default `gemini-4-hydrogen-low`) direto na linha de comando.)
 
 ## Uso
 
@@ -105,7 +105,7 @@ visual (roda headless, não enxerga render) e julgamento de design — use você
 
 ## Overrides
 
-- `DELEGATE_MODEL` (default `gemini-3.8-flash-low`) — ignorado se usar `--think`
+- `DELEGATE_MODEL` (default `gemini-4-hydrogen-low`) — ignorado se usar `--think`
 - `DELEGATE_TIMEOUT` (default `30m`) — timeout do print mode do `agy`
 - `HANDOFF_DIR` (default `.handoff`)
 - `MAX_ITERS` (default `20`) — teto do `claude-loop`

@@ -10,6 +10,48 @@ Registro das rodadas que decidiram (ou confirmaram) o modelo default do `delegat
 Legenda: `f1` = rename com chave de protocolo intocável; `f2` = N+1→lote com juiz oculto
 (5 invariantes que nenhum teste do repo cobre).
 
+## 14/11/2026 — 4 Argon Low × 4 Hydrogen Low × 4 Hydrogen Medium × Orchestrator → **default vira Gemini 4 Hydrogen Low**
+
+agy 1.5.9. Primeira rodada com tokens medidos automaticamente (`bench/tokens.js`, linha `TOKENS` no
+placar) e com **duas rodadas** por modelo. `volume` = entrada + cache lido + saída, f1+f2 somados.
+Hydrogen High/XHigh não rodaram (regra do low: esforço alto não paga na bancada).
+
+| modelo | rodada | tempo f1+f2 | passos | tools | entrada | cache | saída | volume | testes | juiz |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **gemini-4-hydrogen-low** | r1 | **58s** | **8** | 17 | 37.080 | 64.263 | 4.031 | **105.374** | 3/3 | 5/5 |
+| **gemini-4-hydrogen-low** | r2 | **51s** | **9** | 19 | 40.693 | 74.779 | 3.899 | **119.371** | 3/3 | 5/5 |
+| gemini-4-argon-low | r1 | 197s | 16 | 29 | 54.388 | 163.288 | 5.863 | 223.539 | 3/3 | 5/5 |
+| gemini-4-argon-low | r2 | 171s | 16 | 24 | 56.858 | 162.591 | 4.623 | 224.072 | 3/3 | 5/5 |
+| gemini-4-hydrogen-medium | r1 | 96s | 16 | 31 | 60.087 | 179.527 | 9.194 | 248.808 | 3/3 | 5/5 |
+| gemini-4-hydrogen-medium | r2 | 100s | 17 | 27 | 60.958 | 195.328 | 9.428 | 265.714 | 3/3 | 5/5 |
+| gemini-pro-orchestrator-g1-pro | r1 | 366s | 19 | 31 | 108.353 | 225.807 | 27.587 | 361.747 | 3/3 | 5/5 |
+| gemini-pro-orchestrator-g1-pro | r2 | 236s | 18 | 29 | 106.230 | 213.035 | 16.584 | 335.849 | 3/3 | 5/5 |
+
+Todos os 16 diffs corretos: na f1, `legacy.js` manteve a chave de fio `retryDelayMs` lendo
+`cfg.backoffBaseMs` (sem fallback morto) e README/`test/` ficaram renomeados; na f2, o juiz oculto deu 5/5.
+
+**Defeito da bancada, achado nesta rodada:** o Node 22.23 deixou de aceitar `node --test test/`
+(pasta como argumento → `MODULE_NOT_FOUND`), então o `npm test` das fixtures quebrava antes de
+rodar teste. Os "3/3" acima são de `node --test test/*.test.js` rodado depois, nos diretórios de
+cada execução. As fixtures agora usam `node --test` (descoberta automática). **Brinde de
+honestidade:** os 16 relatos disseram que o `npm test` falhou e mostraram o comando que de fato
+passou — nenhum "verde falso". Argon Low (2×) e Hydrogen Medium (1×) corrigiram o `package.json`
+por conta própria e avisaram; os demais deixaram intocado por escopo e avisaram. Ambos aceitáveis.
+
+**Decisão:** default = `gemini-4-hydrogen-low`; `--think low|med|high` → `gemini-4-hydrogen-*`.
+Mesma qualidade do Argon Low com ~metade do volume de contexto (~112k vs ~224k), metade dos passos
+e 1/3 do relógio, consistente nas duas rodadas (a variação entre rodadas foi ~±15%, muito menor
+que a diferença). Hydrogen Medium gastou 2,3× o low sem ganho — confirma a regra do low.
+O **Orchestrator** foi o mais caro (~349k): roteia passos para um `gemini-flash-worker-agy` e
+gera muito mais saída; não serve de default para tarefa braçal.
+
+**Observação de comparabilidade:** o Argon Low mediu ~224k hoje contra 165k em 19/10 (outra versão
+do agy, auditoria manual). Compare só números da mesma rodada.
+
+**Pendente:** nenhum 429 em 16 execuções, então não se sabe se Hydrogen e Argon têm cotas
+separadas. O fallback automático segue para o 3.8 Flash (outra geração; separação Argon × Flash já
+observada). Se um dia o Hydrogen bater cota, anotar aqui se o Argon ainda respondia.
+
 ## 19/10/2026 — 3.8 Flash Low × 4.0 Argon Low × 4.0 Argon Medium → **default vira Gemini 4 Argon Low**
 
 **Aplicação da Filosofia nesta Rodada:**

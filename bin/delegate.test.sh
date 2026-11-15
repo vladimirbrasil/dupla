@@ -85,11 +85,11 @@ espera_rc 0; recebeu "- item um"
 
 caso "--think e --redo continuam valendo"
 roda --think low --redo "corrija X"
-espera_rc 0; recebeu "corrija X"; recebeu "--continue"; recebeu "gemini-4-argon-low"
+espera_rc 0; recebeu "corrija X"; recebeu "--continue"; recebeu "gemini-4-hydrogen-low"
 
-caso "sem --think nem DELEGATE_MODEL vai o default da bancada (4.0 Argon low)"
+caso "sem --think nem DELEGATE_MODEL vai o default da bancada (4 Hydrogen low)"
 DELEGATE_MODEL="" roda "tarefa"
-espera_rc 0; recebeu "gemini-4-argon-low"
+espera_rc 0; recebeu "gemini-4-hydrogen-low"
 
 caso "--think pro é recusado sem chamar o agente (o 3.1 Pro saiu do agy)"
 roda --think pro "analise X"
@@ -99,13 +99,13 @@ caso "resposta vazia com exit 0: falha e mostra o stderr do agy"
 DUBLE_STDERR="Error: Eligibility check failed: UNAVAILABLE (code 503)" roda "tarefa"
 espera_rc 1; contem "DELEGATE_FAILED"; contem "UNAVAILABLE (code 503)"
 
-caso "cota esgotada no 4 Argon alterna automaticamente para 3.8 Flash"
-DUBLE_QUOTA_MODEL="gemini-4-argon-low" DELEGATE_MODEL="" roda "tarefa com fallback"
-espera_rc 0; recebeu "gemini-4-argon-low"; recebeu "gemini-3.8-flash-low"; contem "alternando automaticamente para gemini-3.8-flash-low"; contem "resumo do dublê"
+caso "cota esgotada no 4 Hydrogen alterna automaticamente para 3.8 Flash"
+DUBLE_QUOTA_MODEL="gemini-4-hydrogen-low" DELEGATE_MODEL="" roda "tarefa com fallback"
+espera_rc 0; recebeu "gemini-4-hydrogen-low"; recebeu "gemini-3.8-flash-low"; contem "alternando automaticamente para gemini-3.8-flash-low"; contem "resumo do dublê"
 
 caso "DELEGATE_QUOTA_FALLBACK=0 desativa o fallback automático de cota"
-DUBLE_QUOTA_MODEL="gemini-4-argon-low" DELEGATE_QUOTA_FALLBACK="0" DELEGATE_MODEL="" roda "tarefa sem fallback"
-espera_rc 1; recebeu "gemini-4-argon-low"; contem "DELEGATE_FAILED"
+DUBLE_QUOTA_MODEL="gemini-4-hydrogen-low" DELEGATE_QUOTA_FALLBACK="0" DELEGATE_MODEL="" roda "tarefa sem fallback"
+espera_rc 1; recebeu "gemini-4-hydrogen-low"; contem "DELEGATE_FAILED"
 
 echo
 if [ "$FALHAS" -eq 0 ]; then

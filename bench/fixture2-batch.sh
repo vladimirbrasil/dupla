@@ -9,7 +9,7 @@ D="$1"; rm -rf "$D"; mkdir -p "$D/src" "$D/test"
 
 cat > "$D/package.json" <<'EOF'
 { "name":"userlab","version":"1.0.0","type":"commonjs",
-  "scripts":{ "test":"node --test test/" } }
+  "scripts":{ "test":"node --test" } }
 EOF
 
 cat > "$D/src/repo.js" <<'EOF'

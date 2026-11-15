@@ -4,7 +4,7 @@
 > Pro/Ultra (login OAuth, sem API paga). Substituiu o gemini-cli, que a Google cortou
 > do tier individual/AI Pro em 18/06/2026 ("migrate to Antigravity"). O `agy` roda em
 > sandbox próprio — por isso o `delegate` passa `--add-dir "$PWD"` para ele enxergar o
-> projeto. Modelos: `--think low|med|high` → **Gemini 4 Argon** no esforço
+> projeto. Modelos: `--think low|med|high` → **Gemini 4 Hydrogen** no esforço
 > correspondente (default `low`), com **fallback automático de cota** para **Gemini 3.8 Flash**.
 > `--think pro` é recusado.
 
@@ -27,10 +27,12 @@ que são curtas o bastante para você fazer direto. A delegação é para o trab
 pesado: você é o cérebro e o revisor.
 
 ### Nível de raciocínio (`--think`) e Fallback Automático de Cota
-- `delegate "<...>"` → **Gemini 4 Argon (Low)**, o default. É o modelo de trabalho mais eficiente
-  (consome ~77% menos tokens de contexto que o 3.8 Flash Low para entregar o mesmo diff perfeito).
-- **Fallback automático de cota (`DELEGATE_QUOTA_FALLBACK=1`, ativo por padrão):** o Gemini 4 Argon
-  e o Gemini 3.8 Flash possuem cotas separadas no Antigravity. Se o Argon devolver
+- `delegate "<...>"` → **Gemini 4 Hydrogen (Low)**, o default desde 14/11/2026. É o modelo de trabalho
+  mais eficiente medido (≈metade do volume de contexto do Argon Low para o mesmo diff perfeito).
+  O Argon Low continua disponível: `DELEGATE_MODEL=gemini-4-argon-low delegate "<...>"`.
+- **Fallback automático de cota (`DELEGATE_QUOTA_FALLBACK=1`, ativo por padrão):** o Gemini 4 e o
+  Gemini 3.8 Flash possuem cotas separadas no Antigravity (observado Argon × Flash; Hydrogen × Flash
+  presumido — nenhum 429 ainda). Se o Hydrogen devolver
   `RESOURCE_EXHAUSTED` / `429`, o próprio `delegate` alterna automaticamente na mesma chamada para o
   `gemini-3.8-flash-*` equivalente (retomando com `--continue` caso já houvesse alteração parcial no
   disco). Quando o Google unificar as cotas no futuro, basta ajustar `FALLBACK_COTA_SEPARADA="0"` em
@@ -39,19 +41,23 @@ pesado: você é o cérebro e o revisor.
   longa ou multi-arquivo.** Esforço alto gasta muito mais token e quase não muda o resultado na bancada.
   Se o low falhar, o remédio é briefing melhor (`--redo`), não esforço maior.
 - `delegate --think high "<...>"` → só com pedido explícito do Vladimir.
-- `delegate --think med "<...>"` → esforço intermediário (na bancada gastou 27% mais tokens que o
-  low sem ganho no diff final).
+- `delegate --think med "<...>"` → esforço intermediário (na bancada o Hydrogen Medium gastou ~2,3× os
+  tokens do low sem ganho no diff final; no Argon, 27% a mais).
 - `delegate --think pro "<...>"` → **recusado** (exit 2). Apontava para o Gemini 3.1 Pro, que saiu
   do agy.
 - `DELEGATE_MODEL=gpt-oss-120b-medium delegate "<...>"` → terceira reserva **manual** se tanto o
-  Argon 4 quanto o Flash 3.8 esgotarem suas cotas: a cota dele também é separada. Qualidade
+  Gemini 4 quanto o Flash 3.8 esgotarem suas cotas: a cota dele também é separada. Qualidade
   inferior — só para transform simples, com revisão de diff redobrada.
 
-**Como se escolhe o default (e por que é Gemini 4 Argon Low desde 19/10/2026).** A filosofia é:
+**Como se escolhe o default (e por que é Gemini 4 Hydrogen Low desde 14/11/2026).** A filosofia é:
 *JAMAIS ter pressa, SEMPRE priorizar a economia de tokens/cota e buscar o melhor custo-benefício
 (qualidade / tokens).* Quando sai modelo novo, roda-se `dupla/bench/run.sh` (duas fixtures com
-armadilhas de contrato e juiz oculto) e audita-se o consumo real de tokens nos transcripts do `agy`.
-Em 19/10/2026 (`dupla/bench/RESULTADOS.md`), o **Gemini 4 Argon Low** gabaritou todos os testes e o
+armadilhas de contrato e juiz oculto) e lê-se a linha `TOKENS` do placar (`bench/tokens.js` soma os transcripts do `agy` sozinho — não
+gaste token Claude lendo transcript). Rode **2 rodadas**: a variação entre rodadas é de ~±20%.
+Em 14/11/2026 o **Gemini 4 Hydrogen Low** entregou o mesmo diff limpo e 5/5 no juiz com ~112k de
+volume por rodada contra ~224k do Argon Low, em 1/3 do relógio; Hydrogen Medium (~257k) e Orchestrator
+(~349k, terceiriza passos a um `gemini-flash-worker-agy`) gastaram mais sem ganho.
+Antes, em 19/10/2026 (`dupla/bench/RESULTADOS.md`), o **Gemini 4 Argon Low** gabaritou todos os testes e o
 juiz oculto consumindo apenas **165k tokens totais de contexto em 31 passos**, contra **713k tokens
 em 72 passos** do 3.8 Flash Low (77% de economia) e 136s vs 190s de relógio.
 
@@ -68,7 +74,7 @@ O script imprime `delegate: modelo = <slug> (agy <versão>)` no stderr — **con
 ### Escada de execução (economizar token de Opus) — regra permanente
 Antes de escrever código você mesmo, desça a escada:
 
-1. **`delegate`** (Antigravity/Gemini 4 Argon Low, com fallback automático para 3.8 Flash Low) — 1ª
+1. **`delegate`** (Antigravity/Gemini 4 Hydrogen Low, com fallback automático para 3.8 Flash Low) — 1ª
    tentativa para qualquer trabalho de implementação: mecânico, repetitivo, multi-arquivo,
    extração/refac, escrever specs.
 2. **`delegate --redo "<correção>"`, ainda em Gemini** — se o agente entregar lixo, o primeiro

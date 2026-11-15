@@ -8,7 +8,7 @@ cat > "$D/package.json" <<'EOF'
   "name": "retry-lab",
   "version": "1.0.0",
   "type": "commonjs",
-  "scripts": { "test": "node --test test/" }
+  "scripts": { "test": "node --test" }
 }
 EOF
 

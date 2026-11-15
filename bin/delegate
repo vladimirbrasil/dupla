@@ -24,19 +24,20 @@
 set -euo pipefail
 
 # --- parse de flags (em qualquer ordem, antes do briefing) ------------------
-#   --think low|med|high  → esforço de raciocínio do Gemini 3.8 Flash (default: low)
+#   --think low|med|high  → esforço de raciocínio do Gemini 4 Hydrogen (default: low)
 #       pro = RECUSADO: o Gemini 3.1 Pro saiu do agy 1.3.4 (ver nota abaixo)
 #   --redo (alias --continue) → re-delega CONTINUANDO a última conversa do agy
 #       (o agente lembra o que já fez; passe só a correção, sem re-briefar tudo)
 THINK=""
 CONTINUE=""
-# 19/10/2026: bancada com medição real de tokens (bench/RESULTADOS.md) elegeu o Gemini 4 Argon Low
-# (gemini-4-argon-low). Entregou diff 100% limpo com 51k tokens de entrada e 165k de volume total de
-# contexto (contra 198k/713k do 3.8 Flash Low — 77% de economia de cota/tokens), e f2 em apenas 52s.
-MODELO_PADRAO="gemini-4-argon-low"
+# 14/11/2026: bancada com 2 rodadas e tokens medidos por bench/tokens.js (bench/RESULTADOS.md) elegeu
+# o Gemini 4 Hydrogen Low. Mesmo diff limpo e 5/5 no juiz que o Argon Low, com ~metade do volume de
+# contexto (~112k vs ~224k por rodada f1+f2) e 3-4x menos relógio. Hydrogen Medium e Orchestrator
+# gastaram mais (~257k e ~349k) sem ganho.
+MODELO_PADRAO="gemini-4-hydrogen-low"
 # Fallback automático de cota: quando gerações distintas têm cotas separadas no Antigravity
 # (ex.: Gemini 4 Argon vs Gemini 3.8 Flash), ativar Fallback="1" permite que o delegate tente
-# automaticamente o modelo equivalente do 3.8 Flash se o Argon devolver RESOURCE_EXHAUSTED / 429.
+# automaticamente o modelo equivalente do 3.8 Flash se o default (Gemini 4) devolver RESOURCE_EXHAUSTED / 429.
 # Quando o Google unificar a cota de todos os modelos, basta mudar o default abaixo para "0" (ou vazio).
 FALLBACK_COTA_SEPARADA="${DELEGATE_QUOTA_FALLBACK:-1}"
 TIMEOUT_PADRAO="30m"
@@ -71,7 +72,7 @@ SAÍDA
 
 VARIÁVEIS DE AMBIENTE (valor em uso agora)
   DELEGATE_MODEL=${DELEGATE_MODEL:-$MODELO_PADRAO}   ignorado com --think; ver 'agy models'
-  DELEGATE_QUOTA_FALLBACK=$FALLBACK_COTA_SEPARADA          1 = cai p/ 3.8 Flash se cota do 4 Argon acabar (0 = desliga)
+  DELEGATE_QUOTA_FALLBACK=$FALLBACK_COTA_SEPARADA          1 = cai p/ 3.8 Flash se cota do 4 Hydrogen acabar (0 = desliga)
   DELEGATE_TIMEOUT=${DELEGATE_TIMEOUT:-$TIMEOUT_PADRAO}                   timeout do print mode do agy
   HANDOFF_DIR=$HANDOFF_DIR                   onde a saída é salva
 EOF
@@ -96,13 +97,13 @@ if [ $# -gt 1 ]; then
   echo "delegate: $# argumentos; o briefing é UM só — faltaram as aspas? Veja: delegate --help" >&2
   exit 2
 fi
-# Modelo default: **Gemini 4 Argon (Low)** — eleito em 19/10/2026.
-# Na bancada (bench/RESULTADOS.md), foi o modelo mais econômico em tokens/cota:
-# consumiu 77% menos tokens de contexto que o 3.8 Flash Low (165k vs 713k) e resolveu
-# as duas fixtures com 31 passos (contra 72 passos do 3.8), gabaritando 3/3 testes e 5/5
-# no juiz oculto.
+# Modelo default: **Gemini 4 Hydrogen (Low)** — eleito em 14/11/2026.
+# Na bancada (bench/RESULTADOS.md, 2 rodadas), foi o modelo mais econômico em tokens/cota:
+# ~112k de volume de contexto por rodada (f1+f2) contra ~224k do Argon Low, 8-9 passos
+# contra 16, 3/3 testes e 5/5 no juiz oculto em todas as execuções.
 #
 # Histórico de defaults anteriores:
+#   - Gemini 4 Argon (Low): 19/10 a 14/11/2026
 #   - Gemini 3.8 Flash (Low): 13/10 a 19/10/2026 (substituiu o 3.7 Flash)
 #   - Gemini 3.7 Flash (High): 10/09 a 13/10/2026
 #   - Gemini 3.6 Flash (High): 30/07 a 10/09/2026
@@ -110,11 +111,11 @@ fi
 #
 # `--think pro` apontava para o Gemini 3.1 Pro, que o agy não lista mais.
 case "$THINK" in
-  low)      MODEL="gemini-4-argon-low" ;;
-  med)      MODEL="gemini-4-argon-medium" ;;
-  high)     MODEL="gemini-4-argon-high" ;;
+  low)      MODEL="gemini-4-hydrogen-low" ;;
+  med)      MODEL="gemini-4-hydrogen-medium" ;;
+  high)     MODEL="gemini-4-hydrogen-high" ;;
   pro)      echo "delegate: RECUSADO — '--think pro' usava o Gemini 3.1 Pro, que saiu do agy (13/10/2026; 'agy models' não o lista)." >&2
-            echo "           Use '--think high' (Gemini 4 Argon High) ou DELEGATE_MODEL=<slug de 'agy models'>." >&2
+            echo "           Use '--think high' (Gemini 4 Hydrogen High) ou DELEGATE_MODEL=<slug de 'agy models'>." >&2
             exit 2 ;;
   "")       MODEL="${DELEGATE_MODEL:-$MODELO_PADRAO}" ;;
   *) echo "delegate: --think inválido '$THINK' (use low|med|high)" >&2; exit 2 ;;
@@ -128,9 +129,11 @@ esac
 FALLBACK_MODEL=""
 if [ "$FALLBACK_COTA_SEPARADA" = "1" ] && [ -z "${DELEGATE_MODEL:-}" ]; then
   case "$MODEL" in
-    gemini-4-argon-low)    FALLBACK_MODEL="gemini-3.8-flash-low" ;;
-    gemini-4-argon-medium) FALLBACK_MODEL="gemini-3.8-flash-medium" ;;
-    gemini-4-argon-high)   FALLBACK_MODEL="gemini-3.8-flash-high" ;;
+    # Destino = 3.8 Flash (outra geração): é a única separação de cota já observada (Argon x Flash).
+    # Se Hydrogen e Argon têm cotas separadas ainda não se sabe (nenhum 429 na bancada de 14/11).
+    gemini-4-hydrogen-low)    FALLBACK_MODEL="gemini-3.8-flash-low" ;;
+    gemini-4-hydrogen-medium) FALLBACK_MODEL="gemini-3.8-flash-medium" ;;
+    gemini-4-hydrogen-high)   FALLBACK_MODEL="gemini-3.8-flash-high" ;;
   esac
 fi
 

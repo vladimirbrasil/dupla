@@ -49,8 +49,13 @@ In October 2026 `agy` 1.3.4 stopped listing 3.7 Flash (and 3.1 Pro), and 3.8 Fla
 through the individual quota in a handful of tasks. On 19/10/2026, with the arrival of the Gemini 4
 Argon family, the bench was audited against raw token metrics: **Gemini 4 Argon Low** solved both
 fixtures in 136 s using **77% fewer context tokens** (165k vs 713k) and 31 steps (vs 72) compared to
-3.8 Flash Low, with 5/5 on the hidden judge. **Gemini 4 Argon Low is the current default**, with
-`--think high` for hard or long tasks.
+3.8 Flash Low, with 5/5 on the hidden judge.
+
+On 14/11/2026 the bench gained automatic per-run token accounting (`bench/tokens.js`, read from the
+`agy` transcripts) and ran two rounds against Gemini 4 Hydrogen and the Orchestrator. **Gemini 4
+Hydrogen Low** matched the clean diff and 5/5 judge with about **half the context volume of Argon
+Low** (~112k vs ~224k per round) and 3-4x less wall clock; Hydrogen Medium (~257k) and the
+Orchestrator (~349k) spent more for nothing. **Gemini 4 Hydrogen Low is the current default.**
 
 ## Install
 
