@@ -1,13 +1,13 @@
 # dupla — one AI thinks, another one types
 
 `dupla` ("pair" in Portuguese) lets [Claude Code](https://claude.com/claude-code) hand heavy,
-mechanical work to a cheaper agent — Google's Antigravity CLI (`agy`, Gemini Flash) — and get
+mechanical work to a cheaper agent — Google's Antigravity CLI (`agy`, a low-effort Gemini model) — and get
 back **only a short summary**, while the full diff lands on disk for review.
 
 The expensive model stays the brain and the reviewer. The cheap one does the typing.
 
 ```
-Claude Code ── briefing ──▶ delegate ──▶ agy (Gemini Flash, auto mode)
+Claude Code ── briefing ──▶ delegate ──▶ agy (Gemini, low effort, auto mode)
      ▲                                        │ edits files, runs tests, iterates
      └──────── 10-line summary ◀──────────────┘ raw output → .handoff/
 ```

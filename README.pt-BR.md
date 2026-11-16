@@ -1,7 +1,7 @@
 # dupla — Claude (cérebro) ↔ Antigravity (operário)
 
 Mecanismo **global** para o Claude Code delegar tarefas braçais/pesadas ao
-**Antigravity CLI (`agy`)** — Gemini Flash —, revisar o resultado e
+**Antigravity CLI (`agy`)** — Gemini em esforço baixo —, revisar o resultado e
 seguir, **sem você servir de leva-e-traz**. Instala uma vez, vale em **todos**
 os projetos.
 
@@ -88,19 +88,20 @@ como ferramenta nativa — o contrato "resumo enxuto" fica garantido no servidor
 
 ## Nível de raciocínio
 
-`delegate` escolhe o thinking do Flash por tipo de tarefa:
+O `delegate` roda sempre no esforço baixo, salvo pedido explícito:
 ```bash
-delegate "<tarefa>"                             # 3.8 Flash LOW (default)
-delegate --think high "<difícil ou longa>"      # HIGH (~3× o relógio e a cota)
+delegate "<tarefa>"                             # Gemini 4 Hydrogen LOW (default desde 14/11/2026)
+delegate --think high "<difícil ou longa>"      # HIGH (gasta bem mais cota; raramente compensa)
 ```
-(`--think med` existe, mas na bancada de 13/10/2026 gastou o mesmo que o high e entregou pior.
+(`--think med` existe, mas na bancada de 14/11/2026 gastou ~2,3× o low sem ganho no diff.
+Se o Hydrogen devolver 429, o `delegate` cai sozinho para o 3.8 Flash Low.
 `--think pro` é recusado: o Gemini 3.1 Pro saiu do `agy`.)
 
 O `delegate` injeta a **doutrina de casa** (aterrar na realidade, script
 determinístico idempotente, cirúrgico, pular-e-reportar, **verificar RODANDO**
 testes/build + `git diff`) — mas agora o `agy` *executa de verdade* esses passos
 (roda comandos, observa, itera), não simula. Mesmo assim: **revise o diff real**,
-o resumo do Flash mente bem. Limites que o `delegate` NÃO cobre: verificação
+o resumo do agente mente bem. Limites que o `delegate` NÃO cobre: verificação
 visual (roda headless, não enxerga render) e julgamento de design — use você.
 
 ## Overrides
