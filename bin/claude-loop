@@ -95,8 +95,8 @@ _resumo_estado() {
     return
   fi
   local sit="em andamento"
-  if grep -q "^TAREFA_COMPLETA" "$STATE"; then sit="TAREFA_COMPLETA"
-  elif grep -q "^PRECISA_HUMANO" "$STATE"; then sit="$(grep -m1 "^PRECISA_HUMANO" "$STATE" | cut -c1-200)"; fi
+  if grep -qxE "TAREFA_COMPLETA[[:space:]]*" "$STATE"; then sit="TAREFA_COMPLETA"
+  elif grep -q "^PRECISA_HUMANO:" "$STATE"; then sit="$(grep -m1 "^PRECISA_HUMANO:" "$STATE" | cut -c1-200)"; fi
   echo "  $STATE (modificado em $(date -r "$STATE" '+%d/%m/%Y %H:%M'))"
   echo "  situação: $sit"
   echo "  começo do arquivo:"
@@ -311,13 +311,13 @@ EOF
     exit 1
   fi
 
-  if grep -q "^TAREFA_COMPLETA" "$STATE"; then
+  if grep -qxE "TAREFA_COMPLETA[[:space:]]*" "$STATE"; then
     echo "✓ TAREFA_COMPLETA em $i iteração(ões)."
     exit 0
   fi
-  if grep -q "^PRECISA_HUMANO" "$STATE"; then
+  if grep -q "^PRECISA_HUMANO:" "$STATE"; then
     echo "⚠ O Claude precisa de você:"
-    grep "^PRECISA_HUMANO" "$STATE" >&2
+    grep "^PRECISA_HUMANO:" "$STATE" >&2
     exit 0
   fi
 done
