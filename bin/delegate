@@ -115,7 +115,7 @@ case "$THINK" in
   med)      MODEL="gemini-4-hydrogen-medium" ;;
   high)     MODEL="gemini-4-hydrogen-high" ;;
   pro)      echo "delegate: RECUSADO — '--think pro' usava o Gemini 3.1 Pro, que saiu do agy (13/10/2026; 'agy models' não o lista)." >&2
-            echo "           Use '--think high' (Gemini 4 Hydrogen High) ou DELEGATE_MODEL=<slug de 'agy models'>." >&2
+            echo "           Use o default, sem --think (Gemini 4 Hydrogen Low), ou DELEGATE_MODEL=<slug de 'agy models'>." >&2
             exit 2 ;;
   "")       MODEL="${DELEGATE_MODEL:-$MODELO_PADRAO}" ;;
   *) echo "delegate: --think inválido '$THINK' (use low|med|high)" >&2; exit 2 ;;

@@ -228,9 +228,10 @@ sozinho. Você é o cérebro/revisor; o trabalho braçal é do 'delegate' (Antig
 Faça:
 1. Leia o ESTADO ATUAL abaixo.
 2. Execute a PRÓXIMA fatia. DELEGUE AGRESSIVAMENTE o braçal/pesado em tokens rodando
-   delegate "<briefing claro com caminhos e entregável>" (--think high p/ mecânico-com-
-   julgamento; --redo p/ corrigir sem re-briefar). Briefing longo → escreva em
-   .handoff/BRIEFING-<fatia>.md e rode: delegate --think high "Execute o briefing em <path>".
+   delegate "<briefing claro com caminhos e entregável>" — SEMPRE no default (low), sem
+   --think: a bancada mediu que low entrega o mesmo diff gastando bem menos; se falhar, o
+   remédio é briefing melhor via --redo, não esforço maior. Briefing longo → escreva em
+   .handoff/BRIEFING-<fatia>.md e rode: delegate "Execute o briefing em <path>".
    Rode o delegate em FOREGROUND e espere terminar (em modo -p ninguém te notifica de
    background; iteração que "aguarda" é iteração jogada fora). Ao voltar, confira que a
    saída .handoff/agy-*.txt não está vazia nem é erro de timeout — e mesmo em erro, cheque
@@ -241,7 +242,7 @@ Faça:
    PROIBIDA quando a fatia (a) REPETE um padrão já provado numa fatia anterior — mesma
    transformação em outro arquivo/helper — ou (b) é mecânica em volume (apagar/mover N
    arquivos, codemod, migração repetitiva). Nesses casos NÃO faça à mão: AGRUPE as fatias
-   repetitivas restantes em UM brief e rode delegate --think med (aponte a fatia-modelo já
+   repetitivas restantes em UM brief e rode delegate, no default low (aponte a fatia-modelo já
    feita como exemplo). Várias fatias "pequenas" feitas no Opus = o desperdício que o
    delegate existe para evitar. Só faça à mão o que exige JULGAMENTO real (design de port/
    arquitetura, teste de caracterização de código sem testes, decisão de risco/produto).
