@@ -266,8 +266,12 @@ EOF
   set +e
   # --verbose: mostra o trabalho AO VIVO (ferramentas/passos), não só a msg final.
   MODELO_ARG=(); [ -n "$CLAUDE_MODEL" ] && MODELO_ARG=(--model "$CLAUDE_MODEL")
-  "$CLAUDE_BIN" --dangerously-skip-permissions --verbose "${MODELO_ARG[@]}" -p "$PROMPT" 2>&1 | tee "$LOG"
-  rc=${PIPESTATUS[0]}
+  # O prompt vai pela ENTRADA PADRÃO, não como argumento: se fosse argumento, o texto do state.md
+  # (que cita comandos, ex. "web-dev-server --port 8080") ficaria na linha de comando do claude, e um
+  # `pgrep -f`/`kill` do próprio agente casaria com ele e o mataria (rc=143/137 — visto 2× em 18–19/11
+  #, sempre logo depois de o agente derrubar o servidor de teste).
+  printf '%s' "$PROMPT" | "$CLAUDE_BIN" --dangerously-skip-permissions --verbose "${MODELO_ARG[@]}" -p 2>&1 | tee "$LOG"
+  rc=${PIPESTATUS[1]}
   set -e
 
   # Limite de uso do Claude. Com AUTO_RESUME=1: lê o horário de reset, DORME até lá
